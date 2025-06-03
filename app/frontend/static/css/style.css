@@ -1,0 +1,183 @@
+/* 基本樣式 */
+body {
+    background-color: #f8f9fa;
+}
+
+.card {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border: none;
+    margin-bottom: 20px;
+}
+
+.card-body {
+    padding: 1.5rem;
+}
+
+/* 策略配置區塊 */
+.strategy-config {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 15px;
+}
+
+/* 即時資訊區塊 */
+.real-time-info {
+    background-color: #fff;
+    padding: 15px;
+    border-radius: 5px;
+}
+
+.current-status {
+    border-bottom: 1px solid #eee;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+}
+
+/* 價格資訊區塊 */
+.price-info {
+    background-color: #f8f9fa;
+    padding: 12px;
+    border-radius: 5px;
+    margin: 10px 0;
+}
+
+.price-info p {
+    margin-bottom: 8px;
+}
+
+.trigger-prices {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.buy-trigger, .sell-trigger {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: 4px;
+    text-align: center;
+    font-weight: 500;
+    font-size: 0.95em;
+    transition: all 0.3s ease;
+}
+
+.buy-trigger {
+    background-color: rgba(25, 135, 84, 0.1);
+    color: #198754;
+    border: 1px solid rgba(25, 135, 84, 0.2);
+}
+
+.sell-trigger {
+    background-color: rgba(220, 53, 69, 0.1);
+    color: #dc3545;
+    border: 1px solid rgba(220, 53, 69, 0.2);
+}
+
+.buy-trigger.near-trigger {
+    background-color: #198754;
+    color: white;
+    animation: pulse 2s infinite;
+}
+
+.sell-trigger.near-trigger {
+    background-color: #dc3545;
+    color: white;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.02);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* 交易統計區塊 */
+.trade-stats {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 5px;
+}
+
+/* 數值顯示 */
+.current-balance,
+.current-price,
+.current-value,
+.trade-count,
+.buy-price,
+.sell-price {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+/* 交易次數警告 */
+.today-trade-count {
+    font-weight: 600;
+}
+
+.trade-count-warning {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+/* 套利金額顯示 */
+.net-profit {
+    font-weight: 600;
+}
+
+.positive {
+    color: #28a745;
+}
+
+.negative {
+    color: #dc3545;
+}
+
+/* 狀態標籤 */
+.badge {
+    font-size: 0.9em;
+    padding: 0.4em 0.8em;
+}
+
+/* 按鈕樣式 */
+.btn-sm {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+/* 分隔線 */
+hr {
+    margin: 1rem 0;
+    border-color: #eee;
+}
+
+/* 響應式調整 */
+@media (max-width: 768px) {
+    .card-body {
+        padding: 1rem;
+    }
+    
+    .strategy-config,
+    .real-time-info,
+    .trade-stats,
+    .price-info {
+        padding: 10px;
+    }
+
+    .trigger-prices {
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .buy-trigger,
+    .sell-trigger {
+        width: 100%;
+        margin: 2px 0;
+    }
+}

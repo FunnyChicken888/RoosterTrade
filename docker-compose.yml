@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  rooster-trade:
+    build: .
+    container_name: rooster-trade
+    ports:
+      - "5003:5003"
+    volumes:
+      # 掛載配置文件
+      - ./app/config:/app/config
+      # 掛載日誌目錄
+      - ./app/log:/app/log
+      # 掛載交易記錄
+      - ./app/records:/app/records
+    environment:
+      - PYTHONPATH=/app
+      - FLASK_APP=frontend.app
+      - FLASK_ENV=production
+    restart: unless-stopped

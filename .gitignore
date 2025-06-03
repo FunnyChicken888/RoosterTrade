@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+.env/
+.venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 策略配置文件（包含敏感信息）
+config/strategies/*.json
+config/config.json
+# 交易記錄
+records/
+records_backup/
+
+# 日誌文件
+*.log
+log/
+logs/
+
+# 其他
+.DS_Store
+Thumbs.db
+log/20250520.log
