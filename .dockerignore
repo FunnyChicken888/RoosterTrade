@@ -38,7 +38,7 @@ venv/
 # 日誌和數據文件（這些會通過 volume 掛載）
 log/*
 records/*
-
+config/*
 # Docker
 Dockerfile
 docker-compose.yml
