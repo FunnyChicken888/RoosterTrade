@@ -29,4 +29,4 @@ if __name__ == '__main__':
         sys.exit(1)
     
     # 啟動Flask應用，禁用重載功能
-    app.run(host='0.0.0.0', debug=True, port=5003, use_reloader=False)
+    app.run(host='0.0.0.0', debug=False, port=5003, use_reloader=False,threaded=True)
