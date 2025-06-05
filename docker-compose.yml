@@ -3,7 +3,7 @@ version: '3.8'
 services:
   rooster-trade:
     build: .
-    container_name: rooster-trade
+    container_name: roostertrade
     ports:
       - "5003:5003"
     volumes:
@@ -13,8 +13,17 @@ services:
       - ./log:/app/log
       # 掛載交易記錄
       - ./records:/app/records
+      # 掛載 Gunicorn 配置
+      - ./gunicorn.conf.py:/app/gunicorn.conf.py
     environment:
       - PYTHONPATH=/app
-      - FLASK_APP=frontend.app
+      - FLASK_APP=app.frontend.app
       - FLASK_ENV=production
+      - GUNICORN_CMD_ARGS="--config /app/gunicorn.conf.py"
+      - CONFIG_PATH=/app/config/config.json
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5003/api/check_connection', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: unless-stopped

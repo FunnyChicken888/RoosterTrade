@@ -14,12 +14,9 @@ class TelegramBotService:
         
         # 載入配置
         try:
-            # 獲取當前文件的目錄路徑
-            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            config_path = os.path.join(current_dir, '..', 'config','config.json')
-            config_path = os.path.abspath(config_path)  # 取得絕對路徑，避免相對路徑問題
-            
-            self.logger.info(f"正在嘗試讀取配置文件: {config_path}")
+            # 使用環境變量或預設路徑
+            config_path = os.getenv('CONFIG_PATH', '/app/config/config.json')
+            self.logger.info(f"使用配置文件: {config_path}")
             
             if not os.path.exists(config_path):
                 self.logger.error(f"配置文件不存在: {config_path}")
@@ -27,11 +24,17 @@ class TelegramBotService:
 
             with open(config_path, 'r') as f:
                 config = json.load(f)
-                self.bot_token = config['telegram_bot_token']
-                self.chat_id = config['telegram_chat_id']
+                self.bot_token = config.get('telegram_bot_token')
+                self.chat_id = config.get('telegram_chat_id')
+                
+                if not self.bot_token or not self.chat_id:
+                    raise ValueError("配置文件缺少必要的 Telegram 參數")
         except Exception as e:
             self.logger.error(f"載入Telegram配置失敗: {e}")
-            raise
+            # 設置預設值，避免應用程式崩潰
+            self.bot_token = None
+            self.chat_id = None
+            self.logger.warning("Telegram Bot 服務將無法啟動，但不影響其他功能")
             
     def _get_updates(self, offset: Optional[int] = None) -> list:
         """獲取Telegram更新"""
@@ -106,6 +109,10 @@ class TelegramBotService:
     def start(self):
         """啟動bot服務"""
         if self._thread is not None:
+            return
+            
+        if not self.bot_token or not self.chat_id:
+            self.logger.warning("缺少 Telegram 配置，Bot 服務無法啟動")
             return
             
         self._running = True

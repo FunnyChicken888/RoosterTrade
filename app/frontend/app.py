@@ -33,11 +33,11 @@ logging.basicConfig(
 
 # 從配置檔案載入 API 金鑰
 try:
-    # 獲取當前文件的目錄路徑
-    current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    log_dir = os.path.join(current_dir, 'config','config.json')
-    log_dir = os.path.abspath(log_dir)  # 取得絕對路徑，避免相對路徑問題
-    with open(log_dir, 'r') as f:
+    # 使用容器內的配置文件路徑
+    config_path = '/app/config/config.json'
+    app.logger.info(f"使用配置文件絕對路徑: {config_path}")
+    app.logger.info(f"正在讀取配置文件: {config_path}")
+    with open(config_path, 'r') as f:
         config = json.load(f)
         CLIENT_API_KEY = config.get('max_api_key', '')
         CLIENT_SECRET_KEY = config.get('max_secret_key', '')
