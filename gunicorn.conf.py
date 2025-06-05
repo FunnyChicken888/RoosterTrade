@@ -5,7 +5,7 @@ bind = "0.0.0.0:5003"
 
 # Worker 進程數量
 # 一般建議：(CPU核心數 * 2) + 1
-workers = multiprocessing.cpu_count() * 2 + 1
+workers = 1
 
 # Worker 類型
 worker_class = "sync"
