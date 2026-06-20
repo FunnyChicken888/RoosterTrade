@@ -1,140 +1,110 @@
-$(document).ready(function() {
-    // API連線檢查
-    $('#checkApiBtn').click(function() {
+$(document).ready(function () {
+
+    // ── 連線狀態膠囊 ──
+    function setConnPill(state, label) {
+        const $p = $('#connStatus');
+        $p.removeClass('conn-ok conn-fail conn-unknown').addClass('conn-' + state);
+        $p.find('.conn-label').text(label);
+    }
+
+    function refreshConnPill() {
+        $.get('/api/check_connection')
+            .done((r) => setConnPill(r.success ? 'ok' : 'fail', r.success ? '已連線' : '未連線'))
+            .fail(() => setConnPill('fail', '未連線'));
+    }
+
+    // 手動「檢查連線」按鈕
+    $('#checkApiBtn').click(function () {
         const $btn = $(this);
         const $status = $('#apiStatus');
-        
-        // 禁用按鈕，顯示載入狀態
-        $btn.prop('disabled', true).text('檢查中...');
-        
-        // 發送API請求
+        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i> 檢查中...');
         $.get('/api/check_connection')
-            .done(function(response) {
+            .done(function (resp) {
                 $status.removeClass('d-none alert-danger alert-success')
-                    .addClass(response.success ? 'alert-success' : 'alert-danger')
-                    .text(response.message)
+                    .addClass(resp.success ? 'alert-success' : 'alert-danger')
+                    .html(`<i class="fas fa-${resp.success ? 'check' : 'triangle-exclamation'} me-2"></i>${resp.message}`)
                     .show();
+                setConnPill(resp.success ? 'ok' : 'fail', resp.success ? '已連線' : '未連線');
             })
-            .fail(function(jqXHR) {
-                $status.removeClass('d-none alert-success')
-                    .addClass('alert-danger')
-                    .text('檢查API連線時發生錯誤')
-                    .show();
+            .fail(function () {
+                $status.removeClass('d-none alert-success').addClass('alert-danger')
+                    .html('<i class="fas fa-triangle-exclamation me-2"></i>檢查 API 連線時發生錯誤').show();
+                setConnPill('fail', '未連線');
             })
-            .always(function() {
-                // 恢復按鈕狀態
-                $btn.prop('disabled', false).text('檢查API連線');
-            });
+            .always(() => $btn.prop('disabled', false).html('<i class="fas fa-plug me-1"></i> 檢查連線'));
     });
 
-    // 處理策略刪除
-    $('.delete-strategy').click(function() {
-        const strategyName = $(this).data('strategy');
-        if (confirm(`確定要刪除策略 "${strategyName}" 嗎？`)) {
-            $.ajax({
-                url: `/strategy/delete/${strategyName}`,
-                method: 'POST',
-                success: function(response) {
-                    if (response.success) {
-                        location.reload();
-                    } else {
-                        alert('刪除策略失敗：' + (response.error || '未知錯誤'));
-                    }
-                },
-                error: function() {
-                    alert('刪除策略時發生錯誤，請稍後再試。');
-                }
-            });
-        }
+    // ── 刪除策略 ──
+    $('.delete-strategy').click(function () {
+        const name = $(this).data('strategy');
+        if (!confirm(`確定要刪除策略「${name}」嗎？此操作會備份並移除其交易紀錄。`)) return;
+        $.ajax({
+            url: `/strategy/delete/${encodeURIComponent(name)}`,
+            method: 'POST',
+            success: (resp) => resp.success ? location.reload() : alert('刪除策略失敗：' + (resp.error || '未知錯誤')),
+            error: () => alert('刪除策略時發生錯誤，請稍後再試。')
+        });
     });
 
-    // 更新交易次數顯示顏色
+    // 今日交易次數接近上限時變色
     function updateTradeCountStyle() {
-        $('.today-trade-count').each(function() {
-            const [current, limit] = $(this).text().split('/');
-            if (parseInt(current) >= parseInt(limit) - 1) {
-                $(this).addClass('trade-count-warning');
-            } else {
-                $(this).removeClass('trade-count-warning');
-            }
+        $('.today-trade-count').each(function () {
+            const [cur, lim] = $(this).text().split('/').map((x) => parseInt(x, 10));
+            $(this).toggleClass('trade-count-warning', cur >= lim - 1);
         });
     }
 
-    // 自動更新功能
+    // ── 即時資料刷新 ──
     function updateStrategyInfo() {
-        $.get('/api/strategies', function(data) {
-            data.forEach(function(strategy) {
-                const container = $(`.real-time-info[data-strategy="${strategy.config.strategy_name}"]`);
-                
-                // 更新基本資訊
-                container.find('.current-balance').text(strategy.current_balance.toFixed(4));
-                container.find('.current-price').text(strategy.current_price.toFixed(2));
-                container.find('.current-value').text(strategy.current_value.toFixed(2));
-                
-                // 更新觸發價格
-                container.find('.buy-price').text(strategy.buy_trigger_price.toFixed(2));
-                container.find('.sell-price').text(strategy.sell_trigger_price.toFixed(2));
-                
-                // 更新交易次數
-                container.find('.today-trade-count').text(
-                    `${strategy.today_trade_count}/${strategy.config.daily_trade_limit}`
-                );
-                container.find('.trade-count').text(strategy.trade_count);
-                
-                // 更新套利金額
-                const netProfitElement = container.find('.net-profit');
-                netProfitElement.text(strategy.net_profit.toFixed(2));
-                netProfitElement
-                    .removeClass('positive negative')
-                    .addClass(strategy.net_profit > 0 ? 'positive' : strategy.net_profit < 0 ? 'negative' : '');
-                
-                // 更新交易次數顯示樣式
-                updateTradeCountStyle();
-                
-                // 更新觸發價格的顯示樣式
-                const currentPrice = strategy.current_price;
-                const buyPrice = strategy.buy_trigger_price;
-                const sellPrice = strategy.sell_trigger_price;
-                
-                // 根據當前價格相對於觸發價格的位置更新樣式
-                container.find('.buy-trigger')
-                    .toggleClass('near-trigger', currentPrice <= buyPrice * 1.01);
-                container.find('.sell-trigger')
-                    .toggleClass('near-trigger', currentPrice >= sellPrice * 0.99);
+        $.get('/api/strategies', function (data) {
+            (data || []).forEach(function (s) {
+                const c = $(`.real-time-info[data-strategy="${s.config.strategy_name}"]`);
+                if (!c.length) return;
+                c.find('.current-balance').text(Number(s.current_balance).toFixed(4));
+                c.find('.current-price').text(Number(s.current_price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                c.find('.current-value').text(Number(s.current_value).toLocaleString('en-US', { maximumFractionDigits: 0 }));
+                c.find('.buy-price').text(Number(s.buy_trigger_price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                c.find('.sell-price').text(Number(s.sell_trigger_price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                c.find('.today-trade-count').text(`${s.today_trade_count}/${s.config.daily_trade_limit}`);
+                c.find('.trade-count').text(s.trade_count);
+
+                const np = c.find('.net-profit');
+                np.text((s.net_profit > 0 ? '+' : '') + Number(s.net_profit).toLocaleString('en-US', { maximumFractionDigits: 0 }))
+                    .removeClass('pos neg').addClass(s.net_profit > 0 ? 'pos' : s.net_profit < 0 ? 'neg' : '');
+
+                // 觸發價接近提示
+                c.find('.buy-trigger').toggleClass('near-trigger', s.current_price <= s.buy_trigger_price * 1.01);
+                c.find('.sell-trigger').toggleClass('near-trigger', s.current_price >= s.sell_trigger_price * 0.99);
             });
+            updateTradeCountStyle();
+            $('#lastUpdate').text(new Date().toLocaleTimeString('zh-TW', { hour12: false }));
         });
     }
 
-    // 每分鐘執行一次策略檢查
-    setInterval(executeStrategies, 60000);
-    setInterval(updateStrategyInfo, 60000);
-    
-    // 頁面載入時立即執行一次
-    executeStrategies();
+    // 執行所有活躍策略（伺服器端有 Lock 保證不會重複觸發）
+    function executeStrategies() {
+        $.ajax({
+            url: '/api/execute_strategies', method: 'POST',
+            success: function (resp) {
+                if (resp.success && resp.results && resp.results.length) {
+                    resp.results.forEach((r) => {
+                        const a = r.action === 'take_profit' ? '停利' : '交易';
+                        console.log(`${r.strategy_name}: ${a} - ${r.message}`);
+                    });
+                } else if (!resp.success) {
+                    console.error('執行策略失敗：', resp.error);
+                }
+            },
+            error: () => console.error('執行策略時發生錯誤')
+        });
+    }
+
+    // 啟動：立即刷新一次，之後每 60 秒
+    refreshConnPill();
     updateStrategyInfo();
     updateTradeCountStyle();
+    executeStrategies();
+    setInterval(refreshConnPill, 60000);
+    setInterval(updateStrategyInfo, 60000);
+    setInterval(executeStrategies, 60000);
 });
-
-// 執行策略檢查
-function executeStrategies() {
-    $.ajax({
-        url: '/api/execute_strategies',
-        method: 'POST',
-        success: function(response) {
-            if (response.success) {
-                const results = response.results;
-                if (results && results.length > 0) {
-                    results.forEach(result => {
-                        const actionText = result.action === 'take_profit' ? '停利' : '交易';
-                        console.log(`${result.strategy_name}: ${actionText} - ${result.message}`);
-                    });
-                }
-            } else {
-                console.error('執行策略失敗：', response.error);
-            }
-        },
-        error: function() {
-            console.error('執行策略時發生錯誤');
-        }
-    });
-}

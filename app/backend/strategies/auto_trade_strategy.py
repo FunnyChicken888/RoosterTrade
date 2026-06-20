@@ -1,43 +1,28 @@
 import logging
-import json
 import datetime
-import os
 from typing import Optional
 from ..models.strategy_config import TradingStrategyConfig
 from ..utils.trading_record import TradingRecord
 from ..utils.notification import TelegramNotifier
 from ..utils.telegram_handler import callback_handler
-from max.client_v3 import ClientV3
+from ..utils.config_loader import load_config
 
 class AutoTradeStrategy:
-    def __init__(self, client: ClientV3, config: TradingStrategyConfig, strategy_manager=None):
+    def __init__(self, client, config: TradingStrategyConfig, strategy_manager=None):
         self.client = client
         self.config = config
         self.logger = logging.getLogger(f"strategy.{config.strategy_name}")
         self.trading_record = TradingRecord(config.strategy_name)
         self.strategy_manager = strategy_manager
-        
-        # 初始化Telegram通知
-        try:
-            # 獲取當前文件的目錄路徑
-            current_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            config_path = os.path.join(current_dir, 'config', 'config.json')
-            config_path = os.path.abspath(config_path)
-            
-            self.logger.info(f"正在嘗試讀取配置文件: {config_path}")
-            
-            if not os.path.exists(config_path):
-                self.logger.error(f"配置文件不存在: {config_path}")
-                raise FileNotFoundError(f"配置文件不存在: {config_path}")
 
-            with open(config_path, 'r') as f:
-                config_data = json.load(f)
-                self.notifier = TelegramNotifier(
-                    config_data['telegram_bot_token'],
-                    config_data['telegram_chat_id']
-                )
-        except Exception as e:
-            self.logger.error(f"初始化Telegram通知失敗: {e}")
+        # 初始化 Telegram 通知（金鑰命名由 config_loader 統一正規化）
+        cfg = load_config()
+        token = cfg.get("telegram_bot_token")
+        chat_id = cfg.get("telegram_chat_id")
+        if token and chat_id:
+            self.notifier = TelegramNotifier(token, chat_id)
+        else:
+            self.logger.info("未設定 Telegram 金鑰，停用交易通知")
             self.notifier = None
     
     def get_current_market_value(self) -> Optional[float]:
@@ -51,8 +36,8 @@ class AutoTradeStrategy:
 
     def get_current_price(self) -> float:
         """獲取當前價格"""
+        market = f"{self.config.coin_type.lower()}twd"
         try:
-            market = f"{self.config.coin_type.lower()}twd"
             trades = self.client.get_trades(market, limit=1)
             if trades and len(trades) > 0:
                 return float(trades[0]['price'])

@@ -1,6 +1,6 @@
 # RoosterTrade - 加密貨幣自動交易系統
 
-RoosterTrade 是一個基於 Python 的加密貨幣自動交易系統，支持多策略管理和自動執行交易。系統使用 Flask 作為 Web 框架，並支持 Docker 部署。
+RoosterTrade 是一個基於 Python 的加密貨幣自動交易系統，支持多策略管理和自動執行交易。系統使用 Flask 作為 Web 框架。
 
 ## 功能特點
 
@@ -24,52 +24,42 @@ RoosterTrade/
 │   ├── frontend/        # 前端程式碼
 │   │   ├── static/     # 靜態資源
 │   │   └── templates/  # HTML模板
-│   ├── max/            # MAX API 客戶端
+│   ├── max/            # MAX API 客戶端（含 mock_client 模擬版）
 │   ├── run.py         # 開發模式入口點
 │   └── wsgi.py        # WSGI 生產環境入口點
 ├── config/             # 配置文件目錄
 │   └── strategies/    # 策略配置
-├── docker-compose.yml # Docker 編排配置
-├── Dockerfile         # Docker 構建文件
 └── gunicorn.conf.py  # Gunicorn 配置
 ```
 
 ## 快速開始
 
-### 使用 Docker（推薦）
-
-1. 克隆代碼庫：
+1. 克隆代碼庫並安裝依賴：
 \`\`\`bash
-git clone https://github.com/yourusername/RoosterTrade.git
+git clone https://github.com/FunnyChicken888/RoosterTrade.git
 cd RoosterTrade
+python -m venv .venv
+.venv\\Scripts\\python -m pip install -r requirements.txt   # Windows
+# source .venv/bin/activate && pip install -r requirements.txt   # macOS / Linux
 \`\`\`
 
 2. 配置環境：
 - 複製 \`config/config_example.json\` 到 \`config/config.json\`
-- 填入您的 API 密鑰和 Telegram 配置
+- 填入您的 API 密鑰和 Telegram 配置（或設 \`demo_mode: true\` 用模擬資料試跑）
 
 3. 啟動服務：
 \`\`\`bash
-docker-compose up -d
+# 開發模式（從 app 目錄執行）
+cd app
+python run.py            # http://localhost:5003
+
+# 生產模式（WSGI）
+gunicorn --config gunicorn.conf.py wsgi:application
 \`\`\`
 
-### 手動安裝
+### DEMO 模式
 
-1. 安裝依賴：
-\`\`\`bash
-pip install -r requirements.txt
-\`\`\`
-
-2. 配置環境（同上）
-
-3. 啟動服務：
-\`\`\`bash
-# 開發模式
-python app/run.py
-
-# 生產模式
-gunicorn --config gunicorn.conf.py app.wsgi:application
-\`\`\`
+沒有真實 API 金鑰也能看 UI：在 \`config/config.json\` 設 \`"demo_mode": true\`（或設環境變數 \`ROOSTER_DEMO=1\`），系統會改用模擬行情與帳戶資料，不會送出任何真實交易。未填寫金鑰時也會自動進入 DEMO 模式。
 
 ## 配置說明
 
@@ -78,12 +68,14 @@ gunicorn --config gunicorn.conf.py app.wsgi:application
 \`config/config.json\` 範例：
 \`\`\`json
 {
-    "TELEGRAM_BOT_TOKEN": "your_telegram_bot_token",
-    "TELEGRAM_CHAT_ID": "your_telegram_chat_id",
+    "demo_mode": false,
+    "telegram_bot_token": "your_telegram_bot_token",
+    "telegram_chat_id": "your_telegram_chat_id",
     "max_api_key": "your_max_api_key",
     "max_secret_key": "your_max_secret_key"
 }
 \`\`\`
+> 金鑰名稱大小寫皆可（\`config_loader\` 會自動正規化），但建議使用上方小寫格式。
 
 ### 策略配置
 
@@ -131,15 +123,15 @@ gunicorn --config gunicorn.conf.py app.wsgi:application
 
 3. 🛡️ 系統安全
    - 使用環境變量管理敏感信息
-   - Docker 容器隔離運行環境
+   - 建議在獨立的虛擬環境（venv）中運行
    - 定期更新依賴包版本
 
 ## 故障排除
 
-1. Docker 容器無法啟動
-   - 檢查 Docker 服務是否運行
+1. 服務無法啟動
    - 確認端口 5003 未被占用
-   - 查看 docker-compose logs 輸出
+   - 確認已安裝 requirements.txt 中的依賴
+   - 查看 app/log/ 下的日誌輸出
 
 2. API 連接失敗
    - 確認配置文件格式正確

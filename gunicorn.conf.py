@@ -1,4 +1,8 @@
-import multiprocessing
+import os
+
+# 日誌目錄（相對於本檔案的 app/log，不再依賴 Docker 容器的 /app 絕對路徑）
+_LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app", "log")
+os.makedirs(_LOG_DIR, exist_ok=True)
 
 # 綁定的 IP 和端口
 bind = "0.0.0.0:5003"
@@ -21,8 +25,8 @@ max_requests = 2000
 max_requests_jitter = 400
 
 # 日誌配置
-accesslog = "/app/log/gunicorn_access.log"
-errorlog = "/app/log/gunicorn_error.log"
+accesslog = os.path.join(_LOG_DIR, "gunicorn_access.log")
+errorlog = os.path.join(_LOG_DIR, "gunicorn_error.log")
 loglevel = "info"
 
 # 預加載應用
