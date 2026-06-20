@@ -1,14 +1,13 @@
 import os
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 import json
 from datetime import datetime
 
-# 獲取專案根目錄的絕對路徑
-current_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from ..utils.paths import strategies_dir
+
 logger = logging.getLogger("strategy_config")
-logger.info(f"專案根目錄路徑: {current_dir}")
 
 
 @dataclass
@@ -22,7 +21,9 @@ class TradingStrategyConfig:
     daily_trade_limit: int = 5  # 每日自動交易次數限制
     confirm_amount_threshold: float = 0  # 需要確認的交易金額閾值
     is_active: bool = True
-    created_at: str = datetime.now().isoformat()
+    # 用 default_factory，否則 dataclass 會在「載入模組時」就把時間固定下來，
+    # 造成所有策略的建立時間都一樣。
+    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     
     def to_dict(self):
         return {
@@ -40,15 +41,15 @@ class TradingStrategyConfig:
     
     def save(self):
         """將策略設定儲存到檔案"""
-        filename = os.path.join(current_dir, "config", "strategies", f"{self.strategy_name}.json")
+        filename = os.path.join(strategies_dir(), f"{self.strategy_name}.json")
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(self.to_dict(), f, ensure_ascii=False, indent=4)
-    
+
     @classmethod
     def load(cls, strategy_name: str) -> Optional['TradingStrategyConfig']:
         """從檔案載入策略設定"""
         try:
-            filename = os.path.join(current_dir, "config", "strategies", f"{strategy_name}.json")
+            filename = os.path.join(strategies_dir(), f"{strategy_name}.json")
             with open(filename, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 return cls(**data)

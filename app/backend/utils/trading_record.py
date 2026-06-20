@@ -3,19 +3,14 @@ import json
 import datetime
 from typing import Tuple
 
+from .paths import records_dir
+
 class TradingRecord:
     def __init__(self, strategy_name):
         self.strategy_name = strategy_name
         self.creation_time = datetime.datetime.now().isoformat()
         self.trade_records = []
-        # 獲取專案根目錄的絕對路徑
-        self.root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-   
-        # 確保記錄目錄存在
-        self.records_dir = os.path.join(self.root_dir, "records")
-        if not os.path.exists(self.records_dir):
-            os.makedirs(self.records_dir)
-            
+        self.records_dir = records_dir()
         self.filename = os.path.join(self.records_dir, f"trading_records_{strategy_name}.json")
         self.load_records()  # 初始化時載入已有記錄
     

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}RoosterTrade{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg app-navbar sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <span class="brand-logo">🐓</span>
+                <span class="brand-text">Rooster<span class="brand-accent">Trade</span></span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto align-items-lg-center">
+                    <li class="nav-item">
+                        <a class="nav-link {% block nav_strategies %}{% endblock %}" href="/">
+                            <i class="fas fa-layer-group me-1"></i> 策略管理
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% block nav_history %}{% endblock %}" href="/history">
+                            <i class="fas fa-clock-rotate-left me-1"></i> 交易歷史
+                        </a>
+                    </li>
+                    <li class="nav-item ms-lg-3">
+                        <span id="connStatus" class="conn-pill conn-unknown">
+                            <span class="conn-dot"></span><span class="conn-label">檢查中…</span>
+                        </span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    {% if demo_mode %}
+    <div class="demo-banner">
+        <i class="fas fa-flask me-2"></i>
+        <strong>DEMO 模式</strong> ── 目前使用模擬行情與帳戶資料，不會送出任何真實交易。
+        若要連接真實 MAX 帳戶，請在 <code>config/config.json</code> 填入 API 金鑰並移除 <code>demo_mode</code>。
+    </div>
+    {% endif %}
+
+    <main class="container py-4">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="app-footer">
+        <div class="container">
+            RoosterTrade · 加密貨幣自動再平衡交易系統 · 僅供學習與研究用途，交易有風險
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

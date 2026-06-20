@@ -49,3 +49,6 @@ logs/
 .DS_Store
 Thumbs.db
 log/20250520.log
+
+# Claude Code local tooling (machine-specific paths)
+.claude/

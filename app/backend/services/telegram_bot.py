@@ -1,40 +1,22 @@
-import json
 import logging
 import threading
 from typing import Dict, Optional
 import requests
 from ..utils.telegram_handler import callback_handler
-import os
+from ..utils.config_loader import load_config
 
 class TelegramBotService:
     def __init__(self):
         self.logger = logging.getLogger("telegram_bot")
         self._running = False
         self._thread = None
-        
-        # 載入配置
-        try:
-            # 使用環境變量或預設路徑
-            config_path = os.getenv('CONFIG_PATH', '/app/config/config.json')
-            self.logger.info(f"使用配置文件: {config_path}")
-            
-            if not os.path.exists(config_path):
-                self.logger.error(f"配置文件不存在: {config_path}")
-                raise FileNotFoundError(f"配置文件不存在: {config_path}")
 
-            with open(config_path, 'r') as f:
-                config = json.load(f)
-                self.bot_token = config.get('telegram_bot_token')
-                self.chat_id = config.get('telegram_chat_id')
-                
-                if not self.bot_token or not self.chat_id:
-                    raise ValueError("配置文件缺少必要的 Telegram 參數")
-        except Exception as e:
-            self.logger.error(f"載入Telegram配置失敗: {e}")
-            # 設置預設值，避免應用程式崩潰
-            self.bot_token = None
-            self.chat_id = None
-            self.logger.warning("Telegram Bot 服務將無法啟動，但不影響其他功能")
+        # 載入配置（金鑰命名由 config_loader 統一正規化、路徑自動解析）
+        cfg = load_config()
+        self.bot_token = cfg.get("telegram_bot_token") or None
+        self.chat_id = cfg.get("telegram_chat_id") or None
+        if not self.bot_token or not self.chat_id:
+            self.logger.warning("未設定 Telegram 金鑰，Bot 服務將不會啟動（不影響其他功能）")
             
     def _get_updates(self, offset: Optional[int] = None) -> list:
         """獲取Telegram更新"""

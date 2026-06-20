@@ -1,183 +1,257 @@
-/* 基本樣式 */
+/* ============================================================
+   RoosterTrade — 深色儀表板主題
+   ============================================================ */
+:root {
+    --bg:        #0b0e14;
+    --bg-2:      #11151f;
+    --surface:   #161b26;
+    --surface-2: #1c2230;
+    --border:    #262d3d;
+    --border-2:  #303849;
+    --text:      #e6e9ef;
+    --text-dim:  #9aa4b6;
+    --text-mute: #6b7486;
+    --accent:    #f5a623;   /* 公雞金 */
+    --accent-2:  #ffc24d;
+    --green:     #26d07c;
+    --green-dim: rgba(38, 208, 124, 0.12);
+    --red:       #ff5c6c;
+    --red-dim:   rgba(255, 92, 108, 0.12);
+    --blue:      #4d9fff;
+    --radius:    14px;
+    --shadow:    0 6px 24px rgba(0,0,0,0.35);
+}
+
+* { box-sizing: border-box; }
+
 body {
-    background-color: #f8f9fa;
-}
-
-.card {
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    border: none;
-    margin-bottom: 20px;
-}
-
-.card-body {
-    padding: 1.5rem;
-}
-
-/* 策略配置區塊 */
-.strategy-config {
-    background-color: #f8f9fa;
-    padding: 15px;
-    border-radius: 5px;
-    margin-bottom: 15px;
-}
-
-/* 即時資訊區塊 */
-.real-time-info {
-    background-color: #fff;
-    padding: 15px;
-    border-radius: 5px;
-}
-
-.current-status {
-    border-bottom: 1px solid #eee;
-    margin-bottom: 15px;
-    padding-bottom: 15px;
-}
-
-/* 價格資訊區塊 */
-.price-info {
-    background-color: #f8f9fa;
-    padding: 12px;
-    border-radius: 5px;
-    margin: 10px 0;
-}
-
-.price-info p {
-    margin-bottom: 8px;
-}
-
-.trigger-prices {
+    background:
+        radial-gradient(1200px 600px at 80% -10%, rgba(245,166,35,0.06), transparent 60%),
+        radial-gradient(900px 500px at -10% 10%, rgba(77,159,255,0.05), transparent 55%),
+        var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+    min-height: 100vh;
     display: flex;
-    gap: 10px;
-    margin-top: 8px;
+    flex-direction: column;
 }
 
-.buy-trigger, .sell-trigger {
-    flex: 1;
-    padding: 8px 12px;
-    border-radius: 4px;
-    text-align: center;
-    font-weight: 500;
-    font-size: 0.95em;
-    transition: all 0.3s ease;
+.mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+.unit { font-size: 0.62em; color: var(--text-mute); margin-left: 4px; font-weight: 500; }
+.pos { color: var(--green) !important; }
+.neg { color: var(--red) !important; }
+.nowrap { white-space: nowrap; }
+code { color: var(--accent-2); background: rgba(245,166,35,0.1); padding: 1px 6px; border-radius: 5px; }
+
+/* ── Navbar ── */
+.app-navbar {
+    background: rgba(13, 17, 25, 0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0.6rem 0;
+}
+.navbar-brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 1.25rem; color: var(--text); }
+.brand-logo { font-size: 1.5rem; filter: drop-shadow(0 2px 6px rgba(245,166,35,0.4)); }
+.brand-text { letter-spacing: -0.3px; }
+.brand-accent { color: var(--accent); }
+.app-navbar .nav-link { color: var(--text-dim); font-weight: 500; padding: 0.45rem 0.9rem; border-radius: 9px; transition: all .18s; }
+.app-navbar .nav-link:hover { color: var(--text); background: var(--surface); }
+.app-navbar .nav-link.active { color: var(--accent); background: rgba(245,166,35,0.1); }
+.navbar-toggler { border-color: var(--border-2); }
+.navbar-toggler-icon { filter: invert(0.8); }
+
+/* 連線狀態膠囊 */
+.conn-pill { display: inline-flex; align-items: center; gap: 7px; font-size: 0.8rem; font-weight: 500;
+    padding: 5px 11px; border-radius: 20px; border: 1px solid var(--border-2); background: var(--surface); }
+.conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-mute);
+    box-shadow: 0 0 0 0 rgba(38,208,124,0.5); }
+.conn-ok    { border-color: rgba(38,208,124,0.4); color: var(--green); }
+.conn-ok    .conn-dot { background: var(--green); animation: pulse-dot 2s infinite; }
+.conn-fail  { border-color: rgba(255,92,108,0.4); color: var(--red); }
+.conn-fail  .conn-dot { background: var(--red); }
+.conn-unknown { color: var(--text-mute); }
+@keyframes pulse-dot {
+    0% { box-shadow: 0 0 0 0 rgba(38,208,124,0.5); }
+    70% { box-shadow: 0 0 0 6px rgba(38,208,124,0); }
+    100% { box-shadow: 0 0 0 0 rgba(38,208,124,0); }
 }
 
-.buy-trigger {
-    background-color: rgba(25, 135, 84, 0.1);
-    color: #198754;
-    border: 1px solid rgba(25, 135, 84, 0.2);
+/* ── Demo 橫幅 ── */
+.demo-banner {
+    background: linear-gradient(90deg, rgba(245,166,35,0.16), rgba(245,166,35,0.06));
+    border-bottom: 1px solid rgba(245,166,35,0.3);
+    color: var(--accent-2);
+    text-align: center; font-size: 0.88rem; padding: 9px 16px;
 }
+.demo-banner code { font-size: 0.85em; }
 
-.sell-trigger {
-    background-color: rgba(220, 53, 69, 0.1);
-    color: #dc3545;
-    border: 1px solid rgba(220, 53, 69, 0.2);
+/* ── 頁首 ── */
+.page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 1.6rem; flex-wrap: wrap; }
+.page-title { font-size: 1.8rem; font-weight: 700; margin: 0; letter-spacing: -0.5px; }
+.page-sub { color: var(--text-dim); margin: 4px 0 0; font-size: 0.92rem; }
+.page-actions { display: flex; gap: 10px; }
+
+/* ── 按鈕 ── */
+.btn { font-weight: 500; border-radius: 10px; transition: all .18s; }
+.btn-accent { background: var(--accent); border: none; color: #1a1206; font-weight: 600; }
+.btn-accent:hover { background: var(--accent-2); color: #1a1206; transform: translateY(-1px); box-shadow: 0 6px 18px rgba(245,166,35,0.3); }
+.btn-ghost { background: var(--surface); border: 1px solid var(--border-2); color: var(--text-dim); }
+.btn-ghost:hover { background: var(--surface-2); color: var(--text); border-color: var(--border-2); }
+.btn-ghost-danger { background: var(--surface); border: 1px solid var(--border-2); color: var(--red); }
+.btn-ghost-danger:hover { background: var(--red-dim); color: var(--red); border-color: rgba(255,92,108,0.4); }
+
+/* ── KPI ── */
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.kpi-card { background: linear-gradient(180deg, var(--surface), var(--bg-2)); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px 20px; }
+.kpi-label { color: var(--text-dim); font-size: 0.82rem; font-weight: 500; }
+.kpi-value { font-size: 1.7rem; font-weight: 700; margin-top: 6px; letter-spacing: -0.5px; }
+.kpi-foot { color: var(--text-mute); font-size: 0.78rem; margin-top: 8px; display: flex; align-items: center; gap: 6px; }
+.small-clock { font-size: 1.4rem; }
+.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.dot-green { background: var(--green); }
+
+/* ── 策略卡 ── */
+.strategy-card { background: linear-gradient(180deg, var(--surface), var(--bg-2));
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; height: 100%;
+    transition: border-color .2s, transform .2s; }
+.strategy-card:hover { border-color: var(--border-2); transform: translateY(-2px); box-shadow: var(--shadow); }
+.sc-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.sc-title-wrap { display: flex; align-items: center; gap: 10px; }
+.sc-title { font-size: 1.12rem; font-weight: 600; margin: 0; }
+
+.coin-chip { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; font-weight: 600; padding: 3px 8px;
+    border-radius: 7px; background: var(--surface-2); border: 1px solid var(--border-2); color: var(--text-dim); }
+.coin-btc  { color: #f7931a; border-color: rgba(247,147,26,0.35); background: rgba(247,147,26,0.1); }
+.coin-eth  { color: #8a9eff; border-color: rgba(138,158,255,0.35); background: rgba(138,158,255,0.1); }
+.coin-usdt { color: #26d07c; border-color: rgba(38,208,124,0.35); background: rgba(38,208,124,0.1); }
+.coin-sol  { color: #c98bff; border-color: rgba(201,139,255,0.35); background: rgba(201,139,255,0.1); }
+
+.status-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 0.76rem; font-weight: 600;
+    padding: 4px 11px; border-radius: 20px; }
+.status-badge.live { color: var(--green); background: var(--green-dim); border: 1px solid rgba(38,208,124,0.3); }
+.status-badge.live .conn-dot { background: var(--green); animation: pulse-dot 2s infinite; }
+.status-badge.stopped { color: var(--text-mute); background: var(--surface-2); border: 1px solid var(--border-2); }
+
+.price-row { margin-bottom: 14px; }
+.price-now { display: flex; align-items: baseline; gap: 8px; }
+.price-now-label { color: var(--text-dim); font-size: 0.82rem; }
+.current-price { font-size: 1.55rem; font-weight: 700; color: var(--text); letter-spacing: -0.5px; }
+
+.trigger-prices { display: flex; gap: 10px; margin-bottom: 16px; }
+.trigger-box { flex: 1; display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 10px;
+    transition: all .3s; }
+.trigger-box .t-label { font-size: 0.74rem; font-weight: 500; }
+.trigger-box .mono { font-size: 1.02rem; font-weight: 600; }
+.buy-trigger { background: var(--green-dim); border: 1px solid rgba(38,208,124,0.2); color: var(--green); }
+.sell-trigger { background: var(--red-dim); border: 1px solid rgba(255,92,108,0.2); color: var(--red); }
+.buy-trigger.near-trigger { background: rgba(38,208,124,0.25); border-color: var(--green); animation: glow-g 2s infinite; }
+.sell-trigger.near-trigger { background: rgba(255,92,108,0.25); border-color: var(--red); animation: glow-r 2s infinite; }
+@keyframes glow-g { 50% { box-shadow: 0 0 16px rgba(38,208,124,0.4); } }
+@keyframes glow-r { 50% { box-shadow: 0 0 16px rgba(255,92,108,0.4); } }
+
+.metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border);
+    border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
+.metric { background: var(--bg-2); padding: 11px 13px; display: flex; flex-direction: column; gap: 3px; }
+.m-label { color: var(--text-dim); font-size: 0.76rem; }
+.m-value { font-size: 1rem; font-weight: 600; }
+.m-value small { color: var(--text-mute); font-weight: 500; }
+.trade-count-warning { color: var(--accent) !important; }
+
+.config-summary { display: flex; flex-wrap: wrap; gap: 14px; padding-top: 4px; }
+.config-summary span { color: var(--text-mute); font-size: 0.8rem; font-family: 'JetBrains Mono', monospace; }
+.config-summary i { color: var(--text-dim); margin-right: 3px; }
+
+.sc-actions { display: flex; gap: 8px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+
+/* ── 空狀態 ── */
+.empty-state { text-align: center; padding: 80px 20px; }
+.empty-icon { font-size: 4rem; filter: grayscale(0.3); margin-bottom: 16px; }
+.empty-state h3 { font-weight: 600; }
+.empty-state p { color: var(--text-dim); margin-bottom: 20px; }
+
+/* ── 表單 ── */
+.form-wrap { max-width: 860px; margin: 0 auto; }
+.form-card { background: linear-gradient(180deg, var(--surface), var(--bg-2)); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 8px 26px 26px; }
+.form-section { padding: 22px 0; border-bottom: 1px solid var(--border); }
+.form-section:last-of-type { border-bottom: none; }
+.section-label { color: var(--accent); font-size: 0.78rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 1px; margin-bottom: 16px; }
+.form-label { color: var(--text-dim); font-size: 0.86rem; font-weight: 500; margin-bottom: 6px; }
+.form-control, .form-select { background: var(--bg); border: 1px solid var(--border-2); color: var(--text);
+    border-radius: 10px; padding: 0.6rem 0.85rem; }
+.form-control:focus, .form-select:focus { background: var(--bg); border-color: var(--accent); color: var(--text);
+    box-shadow: 0 0 0 3px rgba(245,166,35,0.15); }
+.form-control[readonly] { background: var(--surface-2); color: var(--text-mute); }
+.form-select option { background: var(--surface); }
+.form-text { color: var(--text-mute); font-size: 0.78rem; }
+.form-actions { display: flex; gap: 12px; padding-top: 22px; }
+.form-check-input { background-color: var(--surface-2); border-color: var(--border-2); }
+.form-check-input:checked { background-color: var(--accent); border-color: var(--accent); }
+.form-switch .form-check-input:focus { box-shadow: 0 0 0 3px rgba(245,166,35,0.15); }
+.form-check-label { color: var(--text-dim); }
+
+/* ── 統計卡（歷史頁） ── */
+.stat-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; }
+.stat-card { background: linear-gradient(180deg, var(--surface), var(--bg-2)); border: 1px solid var(--border);
+    border-radius: 12px; padding: 15px 16px; }
+.stat-card.highlight { border-color: rgba(245,166,35,0.35); background: linear-gradient(180deg, rgba(245,166,35,0.08), var(--bg-2)); }
+.stat-label { color: var(--text-dim); font-size: 0.78rem; }
+.stat-value { font-size: 1.18rem; font-weight: 700; margin-top: 6px; letter-spacing: -0.3px; }
+
+/* ── 面板 / 表格 ── */
+.panel { background: linear-gradient(180deg, var(--surface), var(--bg-2)); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 22px; }
+.filter-row { display: flex; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+.filter-item { flex: 1; min-width: 200px; }
+
+.table { color: var(--text); margin: 0; }
+.table thead th { color: var(--text-dim); font-size: 0.78rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.5px; border-bottom: 1px solid var(--border-2); padding: 12px 10px; }
+.table tbody td { border-color: var(--border); padding: 12px 10px; font-size: 0.9rem; }
+.table tbody tr { transition: background .15s; }
+.table tbody tr:hover { background: var(--surface-2); }
+.table > :not(caption) > * > * { background: transparent; }
+
+.trade-badge { font-size: 0.76rem; font-weight: 600; padding: 3px 10px; border-radius: 6px; }
+.trade-badge.buy { color: var(--green); background: var(--green-dim); }
+.trade-badge.sell { color: var(--red); background: var(--red-dim); }
+
+/* DataTables 深色覆寫 */
+.dataTables_wrapper .dataTables_length,
+.dataTables_wrapper .dataTables_filter,
+.dataTables_wrapper .dataTables_info,
+.dataTables_wrapper .dataTables_paginate { color: var(--text-dim) !important; font-size: 0.85rem; }
+.dataTables_wrapper .dataTables_filter input,
+.dataTables_wrapper .dataTables_length select {
+    background: var(--bg); border: 1px solid var(--border-2); color: var(--text); border-radius: 8px; padding: 4px 8px; }
+.dataTables_wrapper .dataTables_paginate .paginate_button { color: var(--text-dim) !important; }
+.dataTables_wrapper .dataTables_paginate .paginate_button.current,
+.dataTables_wrapper .dataTables_paginate .paginate_button.current:hover {
+    background: var(--accent) !important; border-color: var(--accent) !important; color: #1a1206 !important; border-radius: 7px; }
+.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+    background: var(--surface-2) !important; border-color: var(--border-2) !important; color: var(--text) !important; border-radius: 7px; }
+
+/* ── Alert ── */
+.alert { border-radius: 10px; border: 1px solid transparent; }
+.alert-success { background: var(--green-dim); border-color: rgba(38,208,124,0.3); color: var(--green); }
+.alert-danger { background: var(--red-dim); border-color: rgba(255,92,108,0.3); color: var(--red); }
+.alert-info { background: rgba(77,159,255,0.1); border-color: rgba(77,159,255,0.3); color: var(--blue); }
+
+/* ── Footer ── */
+.app-footer { margin-top: auto; border-top: 1px solid var(--border); padding: 20px 0;
+    color: var(--text-mute); font-size: 0.82rem; text-align: center; }
+
+/* ── 響應式 ── */
+@media (max-width: 992px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .stat-grid { grid-template-columns: repeat(3, 1fr); }
 }
-
-.buy-trigger.near-trigger {
-    background-color: #198754;
-    color: white;
-    animation: pulse 2s infinite;
-}
-
-.sell-trigger.near-trigger {
-    background-color: #dc3545;
-    color: white;
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0% {
-        transform: scale(1);
-    }
-    50% {
-        transform: scale(1.02);
-    }
-    100% {
-        transform: scale(1);
-    }
-}
-
-/* 交易統計區塊 */
-.trade-stats {
-    background-color: #f8f9fa;
-    padding: 15px;
-    border-radius: 5px;
-}
-
-/* 數值顯示 */
-.current-balance,
-.current-price,
-.current-value,
-.trade-count,
-.buy-price,
-.sell-price {
-    font-weight: 600;
-    color: #2c3e50;
-}
-
-/* 交易次數警告 */
-.today-trade-count {
-    font-weight: 600;
-}
-
-.trade-count-warning {
-    color: #dc3545;
-    font-weight: bold;
-}
-
-/* 套利金額顯示 */
-.net-profit {
-    font-weight: 600;
-}
-
-.positive {
-    color: #28a745;
-}
-
-.negative {
-    color: #dc3545;
-}
-
-/* 狀態標籤 */
-.badge {
-    font-size: 0.9em;
-    padding: 0.4em 0.8em;
-}
-
-/* 按鈕樣式 */
-.btn-sm {
-    padding: 0.25rem 0.75rem;
-    font-size: 0.875rem;
-}
-
-/* 分隔線 */
-hr {
-    margin: 1rem 0;
-    border-color: #eee;
-}
-
-/* 響應式調整 */
-@media (max-width: 768px) {
-    .card-body {
-        padding: 1rem;
-    }
-    
-    .strategy-config,
-    .real-time-info,
-    .trade-stats,
-    .price-info {
-        padding: 10px;
-    }
-
-    .trigger-prices {
-        flex-direction: column;
-        gap: 5px;
-    }
-
-    .buy-trigger,
-    .sell-trigger {
-        width: 100%;
-        margin: 2px 0;
-    }
+@media (max-width: 576px) {
+    .kpi-grid { grid-template-columns: 1fr; }
+    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+    .trigger-prices { flex-direction: column; }
+    .metric-grid { grid-template-columns: 1fr; }
+    .page-head { align-items: flex-start; }
 }

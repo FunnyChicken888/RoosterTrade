@@ -4,12 +4,12 @@ import logging
 import datetime
 import threading
 from typing import List, Dict, Optional
-from max.client_v3 import ClientV3
 from ..models.strategy_config import TradingStrategyConfig
+from ..utils.paths import strategies_dir, records_dir
 from .auto_trade_strategy import AutoTradeStrategy
 
 class StrategyManager:
-    def __init__(self, client: ClientV3):
+    def __init__(self, client):
         self.client = client
         self.strategies: Dict[str, AutoTradeStrategy] = {}
         self.logger = logging.getLogger("strategy_manager")
@@ -18,29 +18,21 @@ class StrategyManager:
 
     def _load_all_strategies(self):
         """載入所有已保存的策略"""
-        current_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        strategy_dir = os.path.join(current_dir, "config", "strategies")
-        if not os.path.exists(strategy_dir):
-            os.makedirs(strategy_dir)
-            return
+        strategy_dir = strategies_dir()
 
-        # 先載入所有策略配置
+        # 載入所有策略配置（不論啟用與否都載入，這樣 UI 才能顯示停用中的策略；
+        # 是否要執行交易由 execute_all_strategies 依 is_active 判斷）
         for filename in os.listdir(strategy_dir):
             if filename.endswith('.json'):
                 strategy_name = filename[:-5]  # 移除 .json 副檔名
                 config = TradingStrategyConfig.load(strategy_name)
-                if config and config.is_active:
+                if config:
                     strategy = AutoTradeStrategy(
-                        self.client, 
+                        self.client,
                         config,
                         strategy_manager=self
                     )
-                    # 確保交易記錄已經載入
-                    root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-                    root_dir = os.path.join(root_dir, 'app')  # 添加 app 目錄
-                    record_file = os.path.join(root_dir, "records", f"trading_records_{strategy_name}.json")
-                    if os.path.exists(record_file):
-                        strategy.trading_record.load_records()
+                    # TradingRecord 在初始化時已載入記錄，這裡不需要重複處理
                     self.strategies[strategy_name] = strategy
 
     def create_strategy(self, config: TradingStrategyConfig) -> bool:
@@ -88,19 +80,16 @@ class StrategyManager:
                 self.logger.error(f"策略 {strategy_name} 不存在")
                 return False
 
-            # 獲取根目錄路徑
-            root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            
             # 刪除策略配置文件
-            config_file = os.path.join(root_dir, "config", "strategies", f"{strategy_name}.json")
+            config_file = os.path.join(strategies_dir(), f"{strategy_name}.json")
             if os.path.exists(config_file):
                 os.remove(config_file)
 
             # 備份並刪除交易記錄文件
-            record_file = os.path.join(root_dir, "records", f"trading_records_{strategy_name}.json")
+            record_file = os.path.join(records_dir(), f"trading_records_{strategy_name}.json")
             if os.path.exists(record_file):
                 # 確保備份目錄存在
-                backup_dir = os.path.join(root_dir, "records_backup")
+                backup_dir = os.path.join(os.path.dirname(records_dir()), "records_backup")
                 if not os.path.exists(backup_dir):
                     os.makedirs(backup_dir)
                 # 生成帶時間戳的備份文件名

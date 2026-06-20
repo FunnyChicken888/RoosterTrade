@@ -1,6 +1,7 @@
 {
-    "TELEGRAM_BOT_TOKEN": "your_telegram_bot_token",
-    "TELEGRAM_CHAT_ID": "your_telegram_chat_id",
-    "CLIENT_API_KEY": "your_client_api_key",
-    "CLIENT_SECRET_KEY": "your_client_secret_key"
+    "demo_mode": false,
+    "telegram_bot_token": "your_telegram_bot_token",
+    "telegram_chat_id": "your_telegram_chat_id",
+    "max_api_key": "your_max_api_key",
+    "max_secret_key": "your_max_secret_key"
 }

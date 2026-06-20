@@ -1,7 +1,6 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 import os
 import sys
-import json
 import logging
 from datetime import datetime
 
@@ -9,14 +8,15 @@ from datetime import datetime
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from max.client_v3 import ClientV3
+from max.mock_client import MockClientV3
 from backend.models.strategy_config import TradingStrategyConfig
 from backend.strategies.strategy_manager import StrategyManager
 from backend.utils.trading_record import TradingRecord
+from backend.utils.config_loader import load_config
+from backend.utils.paths import APP_DIR
 
 app = Flask(__name__)
-# 獲取當前文件的目錄路徑
-current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-log_dir = os.path.join(current_dir, 'log')
+log_dir = os.path.join(APP_DIR, 'log')
 
 # 確保日誌目錄存在
 if not os.path.exists(log_dir):
@@ -26,32 +26,21 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(os.path.join(log_dir, f'{datetime.now().strftime("%Y%m%d")}.log')),
+        logging.FileHandler(os.path.join(log_dir, f'{datetime.now().strftime("%Y%m%d")}.log'), encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
 
-# 從配置檔案載入 API 金鑰
-try:
-    # 使用容器內的配置文件路徑
-    config_path = '/app/config/config.json'
-    app.logger.info(f"使用配置文件絕對路徑: {config_path}")
-    app.logger.info(f"正在讀取配置文件: {config_path}")
-    with open(config_path, 'r') as f:
-        config = json.load(f)
-        CLIENT_API_KEY = config.get('max_api_key', '')
-        CLIENT_SECRET_KEY = config.get('max_secret_key', '')
-except FileNotFoundError:
-    app.logger.error("找不到config.json文件，請確保文件存在並包含正確的API金鑰")
-    CLIENT_API_KEY = ''
-    CLIENT_SECRET_KEY = ''
-except json.JSONDecodeError:
-    app.logger.error("config.json格式錯誤")
-    CLIENT_API_KEY = ''
-    CLIENT_SECRET_KEY = ''
+# 載入設定（金鑰命名已正規化，並判斷是否進入 demo 模式）
+config = load_config()
+DEMO_MODE = config.get('demo_mode', False)
 
-# 初始化 MAX client 和策略管理器
-client = ClientV3(CLIENT_API_KEY, CLIENT_SECRET_KEY)
+# 初始化 MAX client：demo 模式用模擬資料，否則連真實交易所
+if DEMO_MODE:
+    app.logger.warning("以 DEMO 模式啟動：使用模擬行情與帳戶資料，不會送出真實交易")
+    client = MockClientV3()
+else:
+    client = ClientV3(config['max_api_key'], config['max_secret_key'])
 
 # 初始化 Telegram Bot 服務
 from backend.services.telegram_bot import bot_service
@@ -93,6 +82,13 @@ if not check_max_api():
 
 strategy_manager = StrategyManager(client)
 
+
+@app.context_processor
+def inject_globals():
+    """讓所有模板都能拿到 demo 旗標。"""
+    return {"demo_mode": DEMO_MODE}
+
+
 @app.route('/')
 def index():
     """首頁 - 顯示所有策略概覽"""
@@ -110,7 +106,11 @@ def new_strategy():
                 max_position=float(request.form['max_position']),
                 take_profit=float(request.form['take_profit']),
                 auto_trade_percent=float(request.form['auto_trade_percent']),
-                coin_type=request.form['coin_type']
+                coin_type=request.form['coin_type'],
+                # 這兩個欄位之前漏傳，導致表單填了也不會生效
+                daily_trade_limit=int(request.form.get('daily_trade_limit', 5)),
+                confirm_amount_threshold=float(request.form.get('confirm_amount_threshold', 0)),
+                is_active=bool(request.form.get('is_active', False))
             )
             if strategy_manager.create_strategy(config):
                 return redirect(url_for('index'))
@@ -135,6 +135,8 @@ def edit_strategy(strategy_name):
                 take_profit=float(request.form['take_profit']),
                 auto_trade_percent=float(request.form['auto_trade_percent']),
                 coin_type=request.form['coin_type'],
+                daily_trade_limit=int(request.form.get('daily_trade_limit', 5)),
+                confirm_amount_threshold=float(request.form.get('confirm_amount_threshold', 0)),
                 is_active=bool(request.form.get('is_active', False))
             )
             if strategy_manager.update_strategy(config):
@@ -219,10 +221,5 @@ def get_strategies():
         return jsonify([])
 
 if __name__ == '__main__':
-    import os
-    import sys
-    # 確保可以從任何目錄運行
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    # 設置環境變量
-    os.environ['FLASK_APP'] = 'frontend.app'
-    app.run(debug=True, port=5000)
+    # 直接執行此檔案時的開發入口（正式啟動請用 app/run.py 或 gunicorn）
+    app.run(host='0.0.0.0', debug=False, port=5003, threaded=True)
