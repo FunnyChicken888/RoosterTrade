@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 import os
 import sys
+import json
 import logging
 from datetime import datetime
 
@@ -14,6 +15,7 @@ from backend.strategies.strategy_manager import StrategyManager
 from backend.utils.trading_record import TradingRecord
 from backend.utils.config_loader import load_config
 from backend.utils.paths import APP_DIR
+from backend.services import twse_data, tw_backtest, twse_stocks, arb_status, tw_backtest_db
 
 app = Flask(__name__)
 log_dir = os.path.join(APP_DIR, 'log')
@@ -110,6 +112,8 @@ def new_strategy():
                 # 這兩個欄位之前漏傳，導致表單填了也不會生效
                 daily_trade_limit=int(request.form.get('daily_trade_limit', 5)),
                 confirm_amount_threshold=float(request.form.get('confirm_amount_threshold', 0)),
+                build_mode=request.form.get('build_mode', 'target'),
+                target_open_price=float(request.form.get('target_open_price') or 0),
                 is_active=bool(request.form.get('is_active', False))
             )
             if strategy_manager.create_strategy(config):
@@ -137,6 +141,8 @@ def edit_strategy(strategy_name):
                 coin_type=request.form['coin_type'],
                 daily_trade_limit=int(request.form.get('daily_trade_limit', 5)),
                 confirm_amount_threshold=float(request.form.get('confirm_amount_threshold', 0)),
+                build_mode=request.form.get('build_mode', 'target'),
+                target_open_price=float(request.form.get('target_open_price') or 0),
                 is_active=bool(request.form.get('is_active', False))
             )
             if strategy_manager.update_strategy(config):
@@ -219,6 +225,130 @@ def get_strategies():
     except Exception as e:
         app.logger.error(f"獲取策略數據時發生錯誤: {e}")
         return jsonify([])
+
+@app.route('/backtest')
+def backtest_page():
+    """台股回測頁面：用真實台股行情 + 台股費稅模擬定值再平衡策略。"""
+    return render_template('backtest.html')
+
+
+@app.route('/arb')
+def arb_page():
+    """套利風控監控儀表板（只示警、絕不下單）。"""
+    return render_template('arb.html')
+
+
+@app.route('/api/arb_status')
+def api_arb_status():
+    """回傳各空腿的距離強平／資金費率／急拉指標與示警等級，供前端輪詢。"""
+    try:
+        snap = arb_status.get_snapshot()
+        return jsonify({"success": True, **snap})
+    except FileNotFoundError:
+        return jsonify({"success": False,
+                        "error": "找不到 config/arb_monitor.json，請先依範本建立設定檔"})
+    except json.JSONDecodeError as e:
+        return jsonify({"success": False, "error": f"設定檔格式錯誤：{e}"})
+    except Exception as e:
+        app.logger.error(f"取得套利風控狀態失敗: {e}")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route('/api/tw_stocks')
+def api_tw_stocks():
+    """上市公司清單（代號 + 簡稱），供回測頁自動完成與依公司名搜尋。"""
+    try:
+        return jsonify({"success": True, "stocks": twse_stocks.get_stock_list()})
+    except Exception as e:
+        app.logger.error(f"取得上市公司清單失敗: {e}")
+        return jsonify({"success": False, "error": str(e), "stocks": []})
+
+@app.route('/api/tw_price')
+def api_tw_price():
+    """回傳某股票最新收盤價與公司名，供回測頁的手續費門檻試算（依股價換算股數）。"""
+    stock_no = str(request.args.get('stock_no', '')).strip()
+    if not stock_no:
+        return jsonify({"success": False, "error": "缺少股票代號"})
+    try:
+        prices = twse_data.fetch_daily_ohlc(stock_no, 1)
+        return jsonify({"success": True, "stock_no": stock_no,
+                        "name": twse_stocks.get_name(stock_no),
+                        "price": prices[-1]["close"]})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route('/api/backtest_tw', methods=['POST'])
+def api_backtest_tw():
+    """執行台股回測。參數見前端表單；band 可傳逗號分隔多值做掃描。"""
+    try:
+        body = request.get_json(force=True) or {}
+        stock_no = str(body.get('stock_no', '')).strip()
+        if not stock_no:
+            return jsonify({"success": False, "error": "請輸入股票代號"})
+
+        months = int(body.get('months', 12))
+        investment_amount = float(body.get('investment_amount', 1000000))
+        max_position = float(body.get('max_position', 0))
+        fee_discount = float(body.get('fee_discount', 0.6))
+        fee_min = float(body.get('fee_min', 20))
+        security_type = str(body.get('security_type', 'common'))
+
+        # band 支援單一數字或逗號分隔多值
+        raw_bands = body.get('bands', body.get('auto_trade_percent', 3))
+        if isinstance(raw_bands, str):
+            bands = [float(b) for b in raw_bands.split(',') if b.strip()]
+        elif isinstance(raw_bands, (list, tuple)):
+            bands = [float(b) for b in raw_bands]
+        else:
+            bands = [float(raw_bands)]
+        bands = sorted(set(bands)) or [3.0]
+
+        prices = twse_data.fetch_daily_ohlc(stock_no, months)
+        costs = tw_backtest.make_costs(fee_discount, fee_min, security_type)
+        results = tw_backtest.run_sweep(prices, investment_amount, max_position, bands, costs)
+
+        return jsonify({
+            "success": True,
+            "stock_no": stock_no,
+            "stock_name": twse_stocks.get_name(stock_no),
+            "start": prices[0]["date"],
+            "end": prices[-1]["date"],
+            "days": len(prices),
+            "price_start": prices[0]["close"],
+            "price_end": prices[-1]["close"],
+            "costs": {"fee_rate": costs["fee_rate"], "fee_min": costs["fee_min"],
+                      "tax_rate": costs["tax_rate"], "security_type": security_type},
+            "results": results,
+        })
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)})
+    except Exception as e:
+        app.logger.error(f"台股回測發生錯誤: {e}")
+        return jsonify({"success": False, "error": f"回測失敗: {e}"})
+
+
+@app.route('/api/backtest_tw_db')
+def api_backtest_tw_db():
+    """查詢批次台股回測資料庫，供前端 ROI 排行與篩選。"""
+    try:
+        run_id = request.args.get('run_id') or None
+        data = tw_backtest_db.query_results(
+            run_id=int(run_id) if run_id else None,
+            q=request.args.get('q', '').strip(),
+            band=request.args.get('band'),
+            min_roi=request.args.get('min_roi'),
+            max_trades=request.args.get('max_trades'),
+            status=request.args.get('status', 'ok'),
+            sort_by=request.args.get('sort_by', 'roi'),
+            order=request.args.get('order', 'desc'),
+            limit=request.args.get('limit', 100),
+            offset=request.args.get('offset', 0),
+        )
+        return jsonify({"success": True, **data})
+    except Exception as e:
+        app.logger.error(f"查詢台股回測資料庫失敗: {e}")
+        return jsonify({"success": False, "error": str(e), "rows": [], "total": 0})
+
 
 if __name__ == '__main__':
     # 直接執行此檔案時的開發入口（正式啟動請用 app/run.py 或 gunicorn）

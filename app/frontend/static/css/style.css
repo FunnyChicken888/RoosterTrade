@@ -9,8 +9,8 @@
     --border:    #262d3d;
     --border-2:  #303849;
     --text:      #e6e9ef;
-    --text-dim:  #9aa4b6;
-    --text-mute: #6b7486;
+    --text-dim:  #c3ccdb;   /* 提高對比，原 #9aa4b6 在深色底偏暗 */
+    --text-mute: #9aa3b6;   /* 提高對比，原 #6b7486 對比過低 */
     --accent:    #f5a623;   /* 公雞金 */
     --accent-2:  #ffc24d;
     --green:     #26d07c;
@@ -40,6 +40,7 @@ body {
 .unit { font-size: 0.62em; color: var(--text-mute); margin-left: 4px; font-weight: 500; }
 .pos { color: var(--green) !important; }
 .neg { color: var(--red) !important; }
+.warn { color: var(--accent-2) !important; }
 .nowrap { white-space: nowrap; }
 code { color: var(--accent-2); background: rgba(245,166,35,0.1); padding: 1px 6px; border-radius: 5px; }
 
@@ -157,6 +158,7 @@ code { color: var(--accent-2); background: rgba(245,166,35,0.1); padding: 1px 6p
 .m-value { font-size: 1rem; font-weight: 600; }
 .m-value small { color: var(--text-mute); font-weight: 500; }
 .trade-count-warning { color: var(--accent) !important; }
+.build-flag { color: var(--accent); font-weight: 600; }
 
 .config-summary { display: flex; flex-wrap: wrap; gap: 14px; padding-top: 4px; }
 .config-summary span { color: var(--text-mute); font-size: 0.8rem; font-family: 'JetBrains Mono', monospace; }
@@ -206,17 +208,31 @@ code { color: var(--accent-2); background: rgba(245,166,35,0.1); padding: 1px 6p
 .filter-row { display: flex; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
 .filter-item { flex: 1; min-width: 200px; }
 
-.table { color: var(--text); margin: 0; }
+.table { color: var(--text); margin: 0;
+    /* 覆寫 Bootstrap 表格變數，避免儲存格文字落回深色（與深色底融在一起） */
+    --bs-table-color: var(--text); --bs-table-bg: transparent; }
 .table thead th { color: var(--text-dim); font-size: 0.78rem; font-weight: 600; text-transform: uppercase;
     letter-spacing: 0.5px; border-bottom: 1px solid var(--border-2); padding: 12px 10px; }
 .table tbody td { border-color: var(--border); padding: 12px 10px; font-size: 0.9rem; }
 .table tbody tr { transition: background .15s; }
 .table tbody tr:hover { background: var(--surface-2); }
-.table > :not(caption) > * > * { background: transparent; }
+/* 同時設定 background 與 color，蓋過 Bootstrap 的 .table > :not(caption) > * > * 規則 */
+.table > :not(caption) > * > * { background: transparent; color: var(--text); }
 
 .trade-badge { font-size: 0.76rem; font-weight: 600; padding: 3px 10px; border-radius: 6px; }
 .trade-badge.buy { color: var(--green); background: var(--green-dim); }
 .trade-badge.sell { color: var(--red); background: var(--red-dim); }
+
+/* 套利風控狀態膠囊 */
+.arb-pill { font-size: 0.76rem; font-weight: 600; padding: 3px 10px; border-radius: 6px; white-space: nowrap; }
+.arb-pill.lvl-ok   { color: var(--green); background: var(--green-dim); }
+.arb-pill.lvl-info { color: var(--blue); background: rgba(77,159,255,0.12); }
+.arb-pill.lvl-warn { color: var(--accent-2); background: rgba(245,166,35,0.14); }
+.arb-pill.lvl-crit { color: var(--red); background: var(--red-dim); }
+.arb-pill.lvl-err  { color: var(--text-mute); background: rgba(154,163,182,0.12); }
+#arb-alerts li.lvl-crit { color: var(--red); }
+#arb-alerts li.lvl-warn { color: var(--accent-2); }
+#arb-alerts li.lvl-info { color: var(--blue); }
 
 /* DataTables 深色覆寫 */
 .dataTables_wrapper .dataTables_length,
@@ -232,6 +248,33 @@ code { color: var(--accent-2); background: rgba(245,166,35,0.1); padding: 1px 6p
     background: var(--accent) !important; border-color: var(--accent) !important; color: #1a1206 !important; border-radius: 7px; }
 .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
     background: var(--surface-2) !important; border-color: var(--border-2) !important; color: var(--text) !important; border-radius: 7px; }
+
+/* ── daterangepicker 深色主題（覆寫第三方淺色樣式，用 body 前綴提高優先級）── */
+body .daterangepicker { background: var(--surface); border: 1px solid var(--border-2);
+    color: var(--text); border-radius: var(--radius); box-shadow: var(--shadow); }
+body .daterangepicker:before { border-bottom-color: var(--border-2); }
+body .daterangepicker:after { border-bottom-color: var(--surface); }
+body .daterangepicker .calendar-table { background: var(--surface); border: none; }
+body .daterangepicker td, body .daterangepicker th { color: var(--text); }
+body .daterangepicker th.month { color: var(--text-dim); }
+body .daterangepicker td.available:hover, body .daterangepicker th.available:hover { background: var(--surface-2); }
+body .daterangepicker td.off, body .daterangepicker td.off.in-range,
+body .daterangepicker td.off.start-date, body .daterangepicker td.off.end-date {
+    background: var(--surface); color: var(--text-mute); }
+body .daterangepicker td.in-range { background: rgba(245,166,35,0.14); color: var(--text); }
+body .daterangepicker td.active, body .daterangepicker td.active:hover { background: var(--accent); color: #1a1206; }
+body .daterangepicker .prev span, body .daterangepicker .next span { border-color: var(--text-dim); }
+body .daterangepicker select.monthselect, body .daterangepicker select.yearselect {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border-2); border-radius: 6px; }
+body .daterangepicker .ranges { border: none; }
+body .daterangepicker .ranges li { color: var(--text-dim); border-radius: 7px; }
+body .daterangepicker .ranges li:hover { background: var(--surface-2); color: var(--text); }
+body .daterangepicker .ranges li.active { background: var(--accent); color: #1a1206; }
+body .daterangepicker .drp-buttons { border-top: 1px solid var(--border); }
+body .daterangepicker .drp-selected { color: var(--text-dim); }
+body .daterangepicker .drp-buttons .applyBtn { background: var(--accent); border-color: var(--accent); color: #1a1206; }
+body .daterangepicker .drp-buttons .cancelBtn { background: var(--surface-2); border-color: var(--border-2); color: var(--text-dim); }
+body .daterangepicker.show-ranges .drp-calendar.left { border-left: 1px solid var(--border); }
 
 /* ── Alert ── */
 .alert { border-radius: 10px; border: 1px solid transparent; }

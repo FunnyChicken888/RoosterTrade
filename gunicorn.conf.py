@@ -29,8 +29,8 @@ accesslog = os.path.join(_LOG_DIR, "gunicorn_access.log")
 errorlog = os.path.join(_LOG_DIR, "gunicorn_error.log")
 loglevel = "info"
 
-# 預加載應用
-preload_app = True
+# 不預加載應用，避免本機更新路由後 worker 仍從舊 master 複製舊版 app
+preload_app = False
 
 # 優雅的重啟時間
 graceful_timeout = 120

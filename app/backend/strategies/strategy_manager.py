@@ -137,9 +137,23 @@ class StrategyManager:
                 
                 # 計算當前持倉的市值
                 current_position_value = current_balance * current_price
-                
+
                 # 計算總套利金額（已實現收益 + 當前持倉市值）
                 net_profit = realized_profit + current_position_value
+
+                # 目前持倉均價 = 淨投資 / 持倉數量（淨投資 = 買入額 − 賣出額）
+                net_investment = strategy.trading_record.get_net_investment()
+                avg_cost = net_investment / current_balance if current_balance > 1e-12 else 0
+
+                # 開倉幣價：建倉完成時記錄的均價；舊資料退回第一筆買單價
+                maker = getattr(strategy, 'maker', None)
+                open_price = maker.open_price if maker and maker.open_price else 0
+                if not open_price:
+                    for r in trade_records:
+                        if r.get('action') == 'buy':
+                            open_price = r['price']
+                            break
+                phase = maker.phase if maker else 'trading'
 
                 # 計算買入和賣出觸發價格
                 target_value = strategy.config.investment_amount
@@ -159,6 +173,9 @@ class StrategyManager:
                     'current_balance': current_balance,
                     'current_price': current_price,
                     'current_value': current_value,
+                    'avg_cost': avg_cost,
+                    'open_price': open_price,
+                    'phase': phase,
                     'trade_count': trade_count,
                     'today_trade_count': today_trade_count,
                     'net_profit': net_profit,
@@ -173,6 +190,9 @@ class StrategyManager:
                     'current_balance': 0,
                     'current_price': 0,
                     'current_value': 0,
+                    'avg_cost': 0,
+                    'open_price': 0,
+                    'phase': 'trading',
                     'trade_count': 0,
                     'today_trade_count': 0,
                     'net_profit': 0,

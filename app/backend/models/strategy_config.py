@@ -20,6 +20,9 @@ class TradingStrategyConfig:
     coin_type: str          # 投資幣種
     daily_trade_limit: int = 5  # 每日自動交易次數限制
     confirm_amount_threshold: float = 0  # 需要確認的交易金額閾值
+    # 建倉設定：build_mode = "target"(固定目標開倉價) 或 "chase"(追買一)
+    build_mode: str = "target"
+    target_open_price: float = 0  # 固定開倉模式的目標價；0 表示用當前市價
     is_active: bool = True
     # 用 default_factory，否則 dataclass 會在「載入模組時」就把時間固定下來，
     # 造成所有策略的建立時間都一樣。
@@ -35,6 +38,8 @@ class TradingStrategyConfig:
             "coin_type": self.coin_type,
             "daily_trade_limit": self.daily_trade_limit,
             "confirm_amount_threshold": self.confirm_amount_threshold,
+            "build_mode": self.build_mode,
+            "target_open_price": self.target_open_price,
             "is_active": self.is_active,
             "created_at": self.created_at
         }

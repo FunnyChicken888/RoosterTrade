@@ -98,6 +98,20 @@
                         <span class="m-value mono"><span class="current-value">{{ "{:,.0f}".format(strategy.current_value) }}</span> <small>TWD</small></span>
                     </div>
                     <div class="metric">
+                        <span class="m-label">目前均價</span>
+                        <span class="m-value mono"><span class="avg-cost">{{ "{:,.2f}".format(strategy.avg_cost) }}</span> <small>TWD</small></span>
+                    </div>
+                    <div class="metric">
+                        <span class="m-label">開倉幣價</span>
+                        <span class="m-value mono">
+                            {% if strategy.phase == 'building' %}
+                            <span class="open-price build-flag">建倉中…</span>
+                            {% else %}
+                            <span class="open-price">{{ "{:,.2f}".format(strategy.open_price) }}</span> <small>TWD</small>
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="metric">
                         <span class="m-label">套利損益</span>
                         <span class="m-value mono net-profit {{ 'pos' if strategy.net_profit > 0 else 'neg' if strategy.net_profit < 0 else '' }}">{{ "{:+,.0f}".format(strategy.net_profit) }}</span>
                     </div>

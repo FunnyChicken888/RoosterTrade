@@ -1,0 +1,16 @@
+{
+  "poll_seconds": 30,
+  "window_min": 15,
+  "cooldown_min": 30,
+  "thresholds": {
+    "liq_buffer_warn": 8.0,
+    "liq_buffer_crit": 4.0,
+    "funding_pay_apr": 5.0,
+    "funding_high_apr": 50.0,
+    "squeeze_pct": 3.0
+  },
+  "positions": [
+    {"label": "幣安PAXG空", "exchange": "binance", "symbol": "PAXGUSDT", "side": "short", "liq_price": 0},
+    {"label": "BingX白銀XAG空", "exchange": "bingx", "symbol": "XAG-USDT", "side": "short", "liq_price": 0}
+  ]
+}

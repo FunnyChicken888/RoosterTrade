@@ -69,6 +69,26 @@
         </div>
 
         <div class="form-section">
+            <h6 class="section-label">建倉設定</h6>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="build_mode" class="form-label">建倉模式</label>
+                    <select class="form-select" id="build_mode" name="build_mode">
+                        <option value="target" {{ 'selected' if not strategy or strategy.build_mode == 'target' else '' }}>固定目標開倉價</option>
+                        <option value="chase" {{ 'selected' if strategy and strategy.build_mode == 'chase' else '' }}>追買一（買一+1 tick 掛 maker）</option>
+                    </select>
+                    <div class="form-text">全數建倉完成後，才開始自動再平衡交易</div>
+                </div>
+                <div class="col-md-6" id="targetPriceWrap">
+                    <label for="target_open_price" class="form-label">目標開倉價 (TWD)</label>
+                    <input type="number" class="form-control" id="target_open_price" name="target_open_price"
+                           value="{{ strategy.target_open_price if strategy and strategy.target_open_price else '' }}" min="0" step="0.01">
+                    <div class="form-text">掛限價買單建倉；留空 = 用當前市價。建倉卡住可回此編輯改價</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section">
             <h6 class="section-label">風險控制</h6>
             <div class="row g-3">
                 <div class="col-md-6">
@@ -101,4 +121,14 @@
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/strategy.js') }}"></script>
+<script>
+    // 追買一模式下隱藏「目標開倉價」欄位
+    (function () {
+        const mode = document.getElementById('build_mode');
+        const wrap = document.getElementById('targetPriceWrap');
+        const toggle = () => { wrap.style.display = mode.value === 'chase' ? 'none' : ''; };
+        mode.addEventListener('change', toggle);
+        toggle();
+    })();
+</script>
 {% endblock %}

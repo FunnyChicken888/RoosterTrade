@@ -63,6 +63,13 @@ $(document).ready(function () {
                 c.find('.current-balance').text(Number(s.current_balance).toFixed(4));
                 c.find('.current-price').text(Number(s.current_price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
                 c.find('.current-value').text(Number(s.current_value).toLocaleString('en-US', { maximumFractionDigits: 0 }));
+                c.find('.avg-cost').text(Number(s.avg_cost).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                const $op = c.find('.open-price');
+                if (s.phase === 'building') {
+                    $op.text('建倉中…').addClass('build-flag');
+                } else {
+                    $op.text(Number(s.open_price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })).removeClass('build-flag');
+                }
                 c.find('.buy-price').text(Number(s.buy_trigger_price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
                 c.find('.sell-price').text(Number(s.sell_trigger_price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
                 c.find('.today-trade-count').text(`${s.today_trade_count}/${s.config.daily_trade_limit}`);

@@ -6,6 +6,11 @@ $(document).ready(function () {
     let dateStart = null;
     let dateEnd = null;
 
+    // 圖表狀態
+    let chart = null;
+    let lastRecords = [];
+    let chartMode = 'pnl';   // 'pnl' = 累積損益, 'price' = 成交價走勢
+
     // 初始化日期範圍選擇器
     $('#date-range').daterangepicker({
         autoUpdateInput: false,
@@ -57,7 +62,107 @@ $(document).ready(function () {
         table.draw();
     });
 
+    // 依時間遞增排序的副本（圖表用；表格自己有排序）
+    function sortedAsc(records) {
+        return records.slice().sort(function (a, b) {
+            return new Date(a.trade_time) - new Date(b.trade_time);
+        });
+    }
+
+    function tlabel(t) {
+        const m = moment(t);
+        return m.isValid() ? m.format('YYYY-MM-DD HH:mm') : String(t);
+    }
+
+    // 累積損益曲線：每筆成交後以「該筆成交價」估算市值，
+    // 損益 = 持倉市值 − 淨投入 − 累積手續費（與回測 profit 定義一致）。
+    function pnlSeries(records) {
+        let holdings = 0, netInv = 0, cumFee = 0;
+        const labels = [], values = [];
+        sortedAsc(records).forEach(function (r) {
+            const amount = Number(r.price) * Number(r.volume);
+            if (r.action === 'buy') { holdings += Number(r.volume); netInv += amount; }
+            else { holdings -= Number(r.volume); netInv -= amount; }
+            cumFee += Number(r.fee || 0);
+            labels.push(tlabel(r.trade_time));
+            values.push(holdings * Number(r.price) - netInv - cumFee);
+        });
+        return { labels: labels, values: values };
+    }
+
+    function priceSeries(records) {
+        const labels = [], values = [], colors = [];
+        sortedAsc(records).forEach(function (r) {
+            labels.push(tlabel(r.trade_time));
+            values.push(Number(r.price));
+            colors.push(r.action === 'buy' ? '#26d07c' : '#ff5c6c');
+        });
+        return { labels: labels, values: values, colors: colors };
+    }
+
+    function distinctCoins(records) {
+        const set = {};
+        records.forEach(function (r) { if (r.coin_type) set[r.coin_type] = 1; });
+        return Object.keys(set);
+    }
+
+    function renderChart() {
+        const canvas = document.getElementById('history-chart');
+        const note = document.getElementById('history-chart-note');
+        if (!canvas || typeof Chart === 'undefined') return;
+        if (chart) { chart.destroy(); chart = null; }
+
+        if (!lastRecords.length) {
+            note.textContent = '沒有可繪製的成交紀錄。';
+            return;
+        }
+
+        let labels, dataset, labelsNote;
+        if (chartMode === 'price') {
+            const s = priceSeries(lastRecords);
+            labels = s.labels;
+            dataset = {
+                label: '成交價',
+                data: s.values,
+                borderColor: '#4d9fff',
+                backgroundColor: 'rgba(77,159,255,0.08)',
+                borderWidth: 2, fill: false, tension: 0.15,
+                pointRadius: 4, pointBackgroundColor: s.colors, pointBorderColor: s.colors
+            };
+            const coins = distinctCoins(lastRecords);
+            labelsNote = '綠點=買入、紅點=賣出。' +
+                (coins.length > 1 ? '⚠ 目前含多個幣種（' + coins.join('、') + '），價格尺度不同，建議用上方「策略篩選」鎖定單一標的。' : '');
+        } else {
+            const s = pnlSeries(lastRecords);
+            labels = s.labels;
+            dataset = {
+                label: '累積損益 (TWD)',
+                data: s.values,
+                borderColor: '#f5a623',
+                backgroundColor: 'rgba(245,166,35,0.10)',
+                borderWidth: 2, fill: true, tension: 0.15, pointRadius: 0
+            };
+            labelsNote = '以每筆成交價對持倉做 mark-to-market：損益 = 持倉市值 − 淨投入 − 累積手續費。';
+        }
+
+        chart = new Chart(canvas, {
+            type: 'line',
+            data: { labels: labels, datasets: [dataset] },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { ticks: { maxTicksLimit: 10, autoSkip: true } },
+                    y: { ticks: { callback: function (v) { return fmt(v); } } }
+                }
+            }
+        });
+        note.textContent = labelsNote;
+    }
+
     function updateTable(records) {
+        lastRecords = records || [];
         table.clear();
         records.forEach(function (r) {
             const badge = r.action === 'buy'
@@ -71,10 +176,12 @@ $(document).ready(function () {
                 badge,
                 Number(r.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
                 Number(r.volume).toFixed(8),
-                Number(r.price * r.volume).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                Number(r.price * r.volume).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                Number(r.fee || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
             ]);
         });
         table.draw();
+        renderChart();
     }
 
     function setSigned(el, val) {
@@ -108,6 +215,14 @@ $(document).ready(function () {
 
     $('#strategy-filter').on('change', function () {
         fetchTradingHistory($(this).val());
+    });
+
+    // 圖表模式切換（累積損益 / 成交價走勢）
+    $('#chart-mode').on('click', 'button', function () {
+        chartMode = $(this).data('mode');
+        $('#chart-mode button').removeClass('active');
+        $(this).addClass('active');
+        renderChart();
     });
 
     fetchTradingHistory();

@@ -6,6 +6,10 @@ from ..utils.trading_record import TradingRecord
 from ..utils.notification import TelegramNotifier
 from ..utils.telegram_handler import callback_handler
 from ..utils.config_loader import load_config
+from .maker_orders import MakerOrderManager
+
+# MAX taker 費率（市價單，如停利全數賣出）
+TAKER_FEE_RATE = 0.0015
 
 class AutoTradeStrategy:
     def __init__(self, client, config: TradingStrategyConfig, strategy_manager=None):
@@ -24,6 +28,12 @@ class AutoTradeStrategy:
         else:
             self.logger.info("未設定 Telegram 金鑰，停用交易通知")
             self.notifier = None
+
+        # 再平衡改用預掛 maker 限價單（取代原本的市價 taker）
+        self.maker = MakerOrderManager(
+            self.client, self.config, self.trading_record,
+            notifier=self.notifier, logger=self.logger,
+        )
     
     def get_current_market_value(self) -> Optional[float]:
         """獲取當前市值，如果發生錯誤返回None"""
@@ -148,13 +158,14 @@ class AutoTradeStrategy:
                 order_type='market'
             )
             
-            # 交易成功後記錄
+            # 交易成功後記錄（市價單走 taker 費率）
             self.trading_record.add_trade_record(
                 datetime.datetime.now().isoformat(),
                 current_price,
                 volume,
                 action,
-                confirmed=need_confirm
+                confirmed=need_confirm,
+                fee=current_price * volume * TAKER_FEE_RATE
             )
             
             success_msg = f"執行{action}交易: {volume} {self.config.coin_type}"
@@ -181,7 +192,16 @@ class AutoTradeStrategy:
             return False
 
     def check_and_trade(self) -> Optional[str]:
-        """檢查並執行交易策略"""
+        """執行一個 poll cycle：對帳 maker 掛單成交並重掛目標掛單。
+
+        定值再平衡的觸發價與量都可事先算死，因此改用預掛限價單（maker）
+        取代原本的市價 taker：賺 maker 費率、成交價更精準。實際的下單/撤單/
+        成交對帳邏輯都在 MakerOrderManager。
+        """
+        return self.maker.sync()
+
+    def check_and_trade_taker(self) -> Optional[str]:
+        """[已停用] 原始的市價 taker 再平衡，保留供對照/回退。"""
         try:
             current_value = self.get_current_market_value()
             if current_value is None:

@@ -130,6 +130,27 @@ class ClientV3(object):
         }
         return self._make_request(f'/api/v3/wallet/{wallet_type}/orders', params=params)
 
+    def get_depth(self, market, limit=10):
+        """獲取市場委託簿深度（含 bids / asks，用於追買一建倉）"""
+        params = {'market': market.lower(), 'limit': limit}
+        return self._make_request('/api/v3/depth', params=params)
+
+    def tick_size(self, market):
+        """回傳最小跳動單位。注意：此為依價位量級的近似值，
+        正式環境應改讀 /api/v3/markets 的市場精度。"""
+        try:
+            trades = self.get_trades(market, limit=1)
+            p = float(trades[0]['price']) if trades else 0
+        except Exception:
+            p = 0
+        if p >= 1000:
+            return 1.0
+        if p >= 100:
+            return 0.5
+        if p >= 10:
+            return 0.05
+        return 0.01
+
     # 帳戶API
     def get_account_balance(self, wallet_type='spot'):
         """獲取帳戶餘額"""

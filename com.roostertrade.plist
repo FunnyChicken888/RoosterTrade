@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  RoosterTrade 開機自動啟動設定 (launchd)
+
+  安裝步驟：
+  1. 複製到 ~/Library/LaunchAgents/
+     cp /Users/funnychicken/git/RoosterTrade/com.roostertrade.plist ~/Library/LaunchAgents/
+  2. 載入服務（登入後自動啟動）：
+     launchctl load ~/Library/LaunchAgents/com.roostertrade.plist
+  3. 停止服務：
+     launchctl unload ~/Library/LaunchAgents/com.roostertrade.plist
+  4. 查看 log：
+     tail -f /tmp/roostertrade.log
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.roostertrade</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/funnychicken/git/RoosterTrade/.venv/bin/gunicorn</string>
+    <string>-c</string>
+    <string>gunicorn.conf.py</string>
+    <string>app.wsgi:application</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/funnychicken/git/RoosterTrade</string>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/roostertrade.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/tmp/roostertrade.err</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/Users/funnychicken/git/RoosterTrade/.venv/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>PYTHONPATH</key>
+    <string>/Users/funnychicken/git/RoosterTrade/app:/Users/funnychicken/git/RoosterTrade</string>
+  </dict>
+</dict>
+</plist>

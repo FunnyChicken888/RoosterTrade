@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block title %}台股回測 · RoosterTrade{% endblock %}
+{% block nav_backtest %}active{% endblock %}
+
+{% block head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1 class="page-title">台股回測</h1>
+        <p class="page-sub">用證交所真實行情 + 台股手續費與證交稅，模擬定值再平衡策略</p>
+    </div>
+</div>
+
+<div class="alert alert-warning" role="alert" style="font-size:.9rem;">
+    <i class="fas fa-circle-info me-1"></i>
+    僅為歷史回測模擬，<strong>不連券商、不送真實單</strong>。台股賣出固定課 0.3% 證交稅且無 maker 折扣，
+    頻繁再平衡易被費稅侵蝕；本工具用來找出較可行的寬 band／標的。資料為<strong>日線、僅上市股票</strong>。
+</div>
+
+{# ── 參數表單 ── #}
+<div class="panel mb-4">
+    <div class="row g-3">
+        <div class="col-6 col-md-2">
+            <label class="form-label" for="bt-stock">股票代號 / 公司名</label>
+            <input type="text" class="form-control" id="bt-stock" value="2330"
+                   placeholder="如 2330 或 台積電" list="bt-stock-list" autocomplete="off">
+            <datalist id="bt-stock-list"></datalist>
+            <div class="form-text" id="bt-stock-name">台積電</div>
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label" for="bt-months">期間（月）</label>
+            <input type="number" class="form-control" id="bt-months" value="12" min="1" max="36">
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label" for="bt-invest">目標市值 V</label>
+            <input type="number" class="form-control" id="bt-invest" value="1000000" min="1000" step="1000">
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label" for="bt-maxpos">加碼上限（0=不設）</label>
+            <input type="number" class="form-control" id="bt-maxpos" value="0" min="0" step="1000">
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label" for="bt-bands">band%（可多值）</label>
+            <input type="text" class="form-control" id="bt-bands" value="3,5,8,10" placeholder="如 3 或 3,5,8">
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label" for="bt-type">標的類型</label>
+            <select class="form-select" id="bt-type">
+                <option value="common">一般股（稅0.3%）</option>
+                <option value="etf">ETF（稅0.1%）</option>
+                <option value="daytrade">現股當沖（稅0.15%）</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label" for="bt-discount">手續費折扣</label>
+            <input type="number" class="form-control" id="bt-discount" value="0.6" min="0.1" max="1" step="0.05">
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label" for="bt-feemin">手續費低消</label>
+            <input type="number" class="form-control" id="bt-feemin" value="20" min="0" step="1">
+        </div>
+        <div class="col-12 col-md-3 d-flex align-items-end">
+            <button class="btn btn-primary w-100" id="bt-run">
+                <i class="fas fa-play me-1"></i> 執行回測
+            </button>
+        </div>
+    </div>
+    <div id="bt-status" class="mt-2" style="font-size:.85rem; color:var(--muted, #888);"></div>
+</div>
+
+{# ── 手續費門檻建議（避免單筆卡 20 元低消） ── #}
+<div class="panel mb-4">
+    <h6 class="section-label">手續費門檻建議</h6>
+    <p class="page-sub" style="margin-top:-6px;">
+        台股每筆有最低手續費，單筆金額太小會卡低消、實際費率飆高。依你的折扣／低消／股價，下面算出「划算門檻」並隨輸入即時更新。
+    </p>
+    <div id="bt-fee-helper" class="stat-grid"></div>
+    <div id="bt-fee-note" class="form-text mt-2"></div>
+</div>
+
+{# ── 批次回測資料庫排行 ── #}
+<div class="panel mb-4">
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+        <div>
+            <h6 class="section-label mb-2">資料庫 ROI 排行</h6>
+            <p class="page-sub">讀取批次回測資料庫，可用代號／公司名、最低 ROI、band 快速篩選比較。</p>
+        </div>
+        <button class="btn btn-sm btn-outline-primary" id="bt-db-refresh">
+            <i class="fas fa-rotate me-1"></i> 重新載入
+        </button>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-4">
+            <label class="form-label" for="bt-db-q">搜尋</label>
+            <input type="text" class="form-control" id="bt-db-q" placeholder="代號或公司名">
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label" for="bt-db-min-roi">最低 ROI%</label>
+            <input type="number" class="form-control" id="bt-db-min-roi" step="1" placeholder="例如 5">
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label" for="bt-db-band">band%</label>
+            <input type="number" class="form-control" id="bt-db-band" step="0.5" placeholder="全部">
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label" for="bt-db-sort">排序</label>
+            <select class="form-select" id="bt-db-sort">
+                <option value="roi">ROI</option>
+                <option value="vs_buy_hold">勝過持有</option>
+                <option value="profit">損益</option>
+                <option value="n_trades">交易次數</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-2 d-flex align-items-end">
+            <button class="btn btn-ghost w-100" id="bt-db-apply">套用</button>
+        </div>
+    </div>
+
+    <div id="bt-db-status" class="mb-2" style="font-size:.85rem; color:var(--text-mute);"></div>
+    <div class="table-responsive">
+        <table class="table align-middle" id="bt-db-table">
+            <thead>
+                <tr>
+                    <th>代號</th>
+                    <th>公司</th>
+                    <th class="text-end">band%</th>
+                    <th class="text-end">ROI%</th>
+                    <th class="text-end">買進持有%</th>
+                    <th class="text-end">勝過持有</th>
+                    <th class="text-end">損益</th>
+                    <th class="text-end">交易次數</th>
+                    <th class="text-end">區間漲跌</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+{# ── 結果區（預設隱藏） ── #}
+<div id="bt-results" style="display:none;">
+    <div class="page-head">
+        <div>
+            <h2 class="page-title" style="font-size:1.2rem;" id="bt-summary-title"></h2>
+            <p class="page-sub" id="bt-summary-sub"></p>
+        </div>
+    </div>
+
+    <div class="stat-grid mb-4" id="bt-cards"></div>
+
+    <div class="panel mb-4">
+        <div style="position:relative; height:320px;">
+            <canvas id="bt-chart" role="img" aria-label="股價走勢與買賣點"></canvas>
+        </div>
+        <div class="mt-2" style="font-size:.8rem; color:#888;">
+            <span style="color:#1d9e75;">●</span> 買進
+            <span style="color:#e24b4a;">●</span> 賣出　（顯示第一個 band 的成交點）
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="table-responsive">
+            <table class="table align-middle" id="bt-sweep-table">
+                <thead>
+                    <tr>
+                        <th>band%</th>
+                        <th class="text-end">交易次數</th>
+                        <th class="text-end">手續費</th>
+                        <th class="text-end">證交稅</th>
+                        <th class="text-end">峰值投入</th>
+                        <th class="text-end">期末市值</th>
+                        <th class="text-end">損益</th>
+                        <th class="text-end">ROI%</th>
+                        <th class="text-end">vs 買進持有</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/backtest.js') }}"></script>
+{% endblock %}

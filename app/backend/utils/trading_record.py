@@ -27,7 +27,7 @@ class TradingRecord:
         """重新從文件載入記錄"""
         self.load_records()
     
-    def add_trade_record(self, trade_time, price, volume, action, confirmed=False):
+    def add_trade_record(self, trade_time, price, volume, action, confirmed=False, fee=0.0):
         """添加交易記錄"""
         record = {
             'strategy_name': self.strategy_name,
@@ -36,7 +36,8 @@ class TradingRecord:
             'volume': volume,
             'action': action,
             'confirmed': confirmed,  # 是否經過Telegram確認
-            'amount': price * volume  # 交易金額
+            'amount': price * volume,  # 交易金額
+            'fee': fee  # 手續費
         }
         self.trade_records.append(record)
         self.save_to_json()  # 每次交易後立即保存

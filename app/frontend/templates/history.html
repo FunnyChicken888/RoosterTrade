@@ -5,6 +5,7 @@
 {% block head %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -43,6 +44,20 @@
     </div>
 </div>
 
+<div class="panel mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+        <h6 class="section-label mb-0">績效圖表</h6>
+        <div class="btn-group btn-group-sm" role="group" id="chart-mode">
+            <button type="button" class="btn btn-outline-primary active" data-mode="pnl">累積損益</button>
+            <button type="button" class="btn btn-outline-primary" data-mode="price">成交價走勢</button>
+        </div>
+    </div>
+    <div style="position:relative; height:320px;">
+        <canvas id="history-chart" role="img" aria-label="交易績效圖"></canvas>
+    </div>
+    <div class="mt-2" style="font-size:.8rem; color:#888;" id="history-chart-note"></div>
+</div>
+
 <div class="panel">
     <div class="filter-row">
         <div class="filter-item">
@@ -71,6 +86,7 @@
                     <th class="text-end">價格</th>
                     <th class="text-end">數量</th>
                     <th class="text-end">總額 (TWD)</th>
+                    <th class="text-end">手續費 (TWD)</th>
                 </tr>
             </thead>
             <tbody>
@@ -89,6 +105,7 @@
                     <td class="mono text-end">{{ "{:,.2f}".format(record.price) }}</td>
                     <td class="mono text-end">{{ "%.8f"|format(record.volume) }}</td>
                     <td class="mono text-end">{{ "{:,.2f}".format(record.price * record.volume) }}</td>
+                    <td class="mono text-end">{{ "{:,.2f}".format(record.get('fee', 0)) }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
