@@ -45,11 +45,11 @@
             <div class="mb-3">
                 <label for="coin_type" class="form-label">投資幣種</label>
                 <select class="form-select" id="coin_type" name="coin_type" required>
-                    <option value="">請選擇幣種</option>
-                    <option value="BTC" {{ 'selected' if strategy and strategy.coin_type == 'BTC' else '' }}>Bitcoin (BTC)</option>
-                    <option value="ETH" {{ 'selected' if strategy and strategy.coin_type == 'ETH' else '' }}>Ethereum (ETH)</option>
-                    <option value="USDT" {{ 'selected' if strategy and strategy.coin_type == 'USDT' else '' }}>Tether (USDT)</option>
+                    <option value="">正在載入幣種...</option>
                 </select>
+                <div class="form-text">
+                    <small class="text-muted">幣種列表從MAX交易所即時獲取</small>
+                </div>
             </div>
 
             <div class="mb-3">
@@ -115,5 +115,13 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/strategy.js') }}"></script>
+    {% if strategy %}
+    <script>
+        // 在編輯模式下設置當前選中的幣種
+        $(document).ready(function() {
+            setCurrentCoinType('{{ strategy.coin_type }}');
+        });
+    </script>
+    {% endif %}
 </body>
 </html>

@@ -4,6 +4,7 @@ import threading
 from typing import Dict, Optional
 import requests
 from ..utils.telegram_handler import callback_handler
+from ..utils.config_loader import ConfigLoader
 import os
 
 class TelegramBotService:
@@ -14,21 +15,15 @@ class TelegramBotService:
         
         # 載入配置
         try:
-            # 使用環境變量或預設路徑
-            config_path = os.getenv('CONFIG_PATH', '/app/config/config.json')
-            self.logger.info(f"使用配置文件: {config_path}")
+            config, config_path = ConfigLoader.load_config()
+            self.logger.info(f"成功載入配置文件: {config_path}")
             
-            if not os.path.exists(config_path):
-                self.logger.error(f"配置文件不存在: {config_path}")
-                raise FileNotFoundError(f"配置文件不存在: {config_path}")
-
-            with open(config_path, 'r') as f:
-                config = json.load(f)
-                self.bot_token = config.get('telegram_bot_token')
-                self.chat_id = config.get('telegram_chat_id')
+            self.bot_token = config.get('telegram_bot_token')
+            self.chat_id = config.get('telegram_chat_id')
+            
+            if not self.bot_token or not self.chat_id:
+                raise ValueError("配置文件缺少必要的 Telegram 參數")
                 
-                if not self.bot_token or not self.chat_id:
-                    raise ValueError("配置文件缺少必要的 Telegram 參數")
         except Exception as e:
             self.logger.error(f"載入Telegram配置失敗: {e}")
             # 設置預設值，避免應用程式崩潰

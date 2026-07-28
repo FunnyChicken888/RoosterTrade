@@ -36,6 +36,11 @@ ENV/
 # 策略配置文件（包含敏感信息）
 config/strategies/*.json
 config/config.json
+app/config/config.json
+app/config/strategies/*.json
+app/data/
+data/
+.env
 # 交易記錄
 records/
 records_backup/

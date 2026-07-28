@@ -139,6 +139,38 @@ body {
     color: #dc3545;
 }
 
+.metric {
+    background: #f8f9fa;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    min-height: 72px;
+    padding: 10px 12px;
+}
+
+.metric span,
+.total-pnl span {
+    color: #6c757d;
+    font-size: 0.85rem;
+}
+
+.metric strong {
+    margin-top: 4px;
+}
+
+.total-pnl {
+    align-items: center;
+    background: #eef2f7;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    padding: 14px;
+}
+
+.total-pnl strong {
+    font-size: 1.25rem;
+}
+
 /* 狀態標籤 */
 .badge {
     font-size: 0.9em;

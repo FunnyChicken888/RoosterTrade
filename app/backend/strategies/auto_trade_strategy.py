@@ -19,23 +19,14 @@ class AutoTradeStrategy:
         
         # 初始化Telegram通知
         try:
-            # 獲取當前文件的目錄路徑
-            current_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            config_path = os.path.join(current_dir, 'config', 'config.json')
-            config_path = os.path.abspath(config_path)
+            from ..utils.config_loader import ConfigLoader
+            config_data, config_path = ConfigLoader.load_config()
+            self.logger.info(f"成功載入配置文件: {config_path}")
             
-            self.logger.info(f"正在嘗試讀取配置文件: {config_path}")
-            
-            if not os.path.exists(config_path):
-                self.logger.error(f"配置文件不存在: {config_path}")
-                raise FileNotFoundError(f"配置文件不存在: {config_path}")
-
-            with open(config_path, 'r') as f:
-                config_data = json.load(f)
-                self.notifier = TelegramNotifier(
-                    config_data['telegram_bot_token'],
-                    config_data['telegram_chat_id']
-                )
+            self.notifier = TelegramNotifier(
+                config_data['telegram_bot_token'],
+                config_data['telegram_chat_id']
+            )
         except Exception as e:
             self.logger.error(f"初始化Telegram通知失敗: {e}")
             self.notifier = None
@@ -163,15 +154,28 @@ class AutoTradeStrategy:
                 order_type='market'
             )
             
-            # 交易成功後記錄
-            self.trading_record.add_trade_record(
-                datetime.datetime.now().isoformat(),
-                current_price,
-                volume,
-                action,
-                confirmed=need_confirm
-            )
-            
+            # 交易成功後記錄 - 增強錯誤處理
+            try:
+                self.trading_record.add_trade_record(
+                    datetime.datetime.now().isoformat(),
+                    current_price,
+                    volume,
+                    action,
+                    confirmed=need_confirm
+                )
+                self.logger.info(f"交易記錄已成功保存: {action} {volume} {self.config.coin_type}")
+            except Exception as record_error:
+                # 記錄保存失敗是嚴重問題，需要特別處理
+                error_msg = f"嚴重錯誤：交易執行成功但記錄保存失敗: {record_error}"
+                self.logger.error(error_msg)
+                if self.notifier:
+                    self.notifier.send_trade_result(
+                        self.config.strategy_name,
+                        False,
+                        f"交易成功但記錄保存失敗: {action} {volume} {self.config.coin_type} - {record_error}"
+                    )
+                # 即使記錄保存失敗，交易已經執行，所以仍然返回True，但要記錄錯誤
+                
             success_msg = f"執行{action}交易: {volume} {self.config.coin_type}"
             self.logger.info(success_msg)
             

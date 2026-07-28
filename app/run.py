@@ -10,11 +10,13 @@ sys.path.append(current_dir)
 
 from frontend.app import app
 from backend.services.telegram_bot import bot_service
+from frontend.app import hedge_monitor
 
 def cleanup():
     """清理資源"""
     print("正在停止Telegram Bot服務...")
     bot_service.stop()
+    hedge_monitor.stop_collector()
 
 if __name__ == '__main__':
     # 註冊清理函數
@@ -23,6 +25,7 @@ if __name__ == '__main__':
     # 啟動Telegram Bot服務
     try:
         bot_service.start()
+        hedge_monitor.start_collector(int(os.getenv('HEDGE_POLL_INTERVAL', '60')))
         print("Telegram Bot服務已啟動")
     except Exception as e:
         print(f"啟動Telegram Bot服務失敗: {e}")

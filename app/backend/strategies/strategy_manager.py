@@ -35,9 +35,9 @@ class StrategyManager:
                         config,
                         strategy_manager=self
                     )
-                    # 確保交易記錄已經載入
+                    # 確保交易記錄已經載入 - 修復路徑問題
                     root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-                    root_dir = os.path.join(root_dir, 'app')  # 添加 app 目錄
+                    # 移除錯誤的 app 目錄添加，保持與 TradingRecord 一致的路徑計算
                     record_file = os.path.join(root_dir, "records", f"trading_records_{strategy_name}.json")
                     if os.path.exists(record_file):
                         strategy.trading_record.load_records()
