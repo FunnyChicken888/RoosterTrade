@@ -298,3 +298,27 @@ body .daterangepicker.show-ranges .drp-calendar.left { border-left: 1px solid va
     .metric-grid { grid-template-columns: 1fr; }
     .page-head { align-items: flex-start; }
 }
+
+/* ── 跨市場避險監控 ── */
+.hedge-card .metric {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    min-height: 72px;
+    padding: 10px 12px;
+}
+.hedge-card .metric span,
+.hedge-card .total-pnl span { color: var(--text-mute); font-size: 0.85rem; }
+.hedge-card .metric strong { margin-top: 4px; }
+.hedge-card .total-pnl {
+    align-items: center;
+    background: var(--surface-2);
+    border: 1px solid var(--border-2);
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    padding: 14px;
+}
+.hedge-card .total-pnl strong { font-size: 1.25rem; }

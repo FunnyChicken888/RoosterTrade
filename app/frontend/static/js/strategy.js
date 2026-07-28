@@ -1,4 +1,7 @@
 $(document).ready(function() {
+    // 載入可交易幣種
+    loadAvailableMarkets();
+
     // 表單驗證
     $('form').submit(function(e) {
         const investment = parseFloat($('#investment_amount').val());
@@ -60,3 +63,77 @@ $(document).ready(function() {
         }
     });
 });
+
+// 載入可交易幣種
+function loadAvailableMarkets() {
+    const coinSelect = $('#coin_type');
+    const currentValue = coinSelect.data('current-value') || '';
+    
+    // 顯示載入狀態
+    coinSelect.html('<option value="">正在載入幣種...</option>');
+    
+    $.ajax({
+        url: '/api/markets',
+        method: 'GET',
+        timeout: 10000,
+        success: function(response) {
+            if (response.success && response.markets) {
+                // 清空選項
+                coinSelect.empty();
+                coinSelect.append('<option value="">請選擇幣種</option>');
+                
+                // 添加幣種選項
+                response.markets.forEach(function(market) {
+                    const isSelected = market.symbol === currentValue ? 'selected' : '';
+                    coinSelect.append(
+                        `<option value="${market.symbol}" ${isSelected}>${market.display_name}</option>`
+                    );
+                });
+                
+                console.log(`成功載入 ${response.markets.length} 個可交易幣種`);
+                
+                // 隱藏載入提示
+                $('.form-text').show();
+            } else {
+                handleMarketLoadError('API回應格式錯誤');
+            }
+        },
+        error: function(xhr, status, error) {
+            let errorMessage = '載入幣種失敗';
+            if (status === 'timeout') {
+                errorMessage = '載入超時，請檢查網絡連接';
+            } else if (xhr.responseJSON && xhr.responseJSON.error) {
+                errorMessage = xhr.responseJSON.error;
+            }
+            handleMarketLoadError(errorMessage);
+        }
+    });
+}
+
+// 處理市場載入錯誤
+function handleMarketLoadError(errorMessage) {
+    const coinSelect = $('#coin_type');
+    
+    // 提供備用選項
+    coinSelect.html(`
+        <option value="">請選擇幣種</option>
+        <option value="BTC">Bitcoin (BTC)</option>
+        <option value="ETH">Ethereum (ETH)</option>
+        <option value="USDT">Tether (USDT)</option>
+    `);
+    
+    // 顯示錯誤訊息
+    $('.form-text').html(`
+        <small class="text-danger">
+            <i class="fas fa-exclamation-triangle"></i>
+            ${errorMessage}，已載入常用幣種選項
+        </small>
+    `);
+    
+    console.error('載入市場數據失敗:', errorMessage);
+}
+
+// 設置當前選中的幣種（用於編輯模式）
+function setCurrentCoinType(coinType) {
+    $('#coin_type').data('current-value', coinType);
+}

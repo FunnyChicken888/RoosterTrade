@@ -11,13 +11,14 @@ sys.path.insert(0, project_root)
 # 設置 PYTHONPATH 環境變數
 os.environ['PYTHONPATH'] = f"{current_dir}:{project_root}"
 
-from frontend.app import app
+from frontend.app import app, hedge_monitor
 from backend.services.telegram_bot import bot_service
 
 def cleanup():
     """清理資源"""
     print("正在停止Telegram Bot服務...")
     bot_service.stop()
+    hedge_monitor.stop_collector()
 
 # 註冊清理函數
 atexit.register(cleanup)
@@ -25,6 +26,7 @@ atexit.register(cleanup)
 # 啟動Telegram Bot服務
 try:
     bot_service.start()
+    hedge_monitor.start_collector(int(os.getenv('HEDGE_POLL_INTERVAL', '60')))
     print("Telegram Bot服務已啟動")
 except Exception as e:
     print(f"啟動Telegram Bot服務失敗: {e}")

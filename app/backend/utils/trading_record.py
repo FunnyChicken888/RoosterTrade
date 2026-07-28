@@ -102,9 +102,38 @@ class TradingRecord:
 
     def save_to_json(self):
         """保存交易記錄到特定策略的JSON文件"""
-        with open(self.filename, 'w', encoding='utf-8') as f:
-            json.dump({
+        try:
+            # 確保目錄存在
+            os.makedirs(os.path.dirname(self.filename), exist_ok=True)
+            
+            # 準備要保存的數據
+            data_to_save = {
                 'strategy_name': self.strategy_name,
                 'creation_time': self.creation_time,
                 'trade_records': self.trade_records
-            }, f, ensure_ascii=False, indent=4)
+            }
+            
+            # 先寫入臨時文件，然後原子性地移動到目標文件
+            temp_filename = self.filename + '.tmp'
+            with open(temp_filename, 'w', encoding='utf-8') as f:
+                json.dump(data_to_save, f, ensure_ascii=False, indent=4)
+            
+            # 原子性地移動文件
+            if os.path.exists(temp_filename):
+                if os.path.exists(self.filename):
+                    os.remove(self.filename)
+                os.rename(temp_filename, self.filename)
+            
+            # 記錄成功保存的日誌
+            import logging
+            logger = logging.getLogger(f"trading_record.{self.strategy_name}")
+            logger.info(f"成功保存交易記錄到: {self.filename}, 共 {len(self.trade_records)} 筆記錄")
+            
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(f"trading_record.{self.strategy_name}")
+            logger.error(f"保存交易記錄失敗: {e}")
+            logger.error(f"目標文件: {self.filename}")
+            logger.error(f"記錄數量: {len(self.trade_records)}")
+            # 重新拋出異常，讓調用者知道保存失敗
+            raise

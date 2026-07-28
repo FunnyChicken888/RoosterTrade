@@ -4,6 +4,9 @@ import sys
 import json
 import logging
 from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # 添加專案根目錄到 Python 路徑
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -16,6 +19,11 @@ from backend.utils.trading_record import TradingRecord
 from backend.utils.config_loader import load_config
 from backend.utils.paths import APP_DIR
 from backend.services import twse_data, tw_backtest, twse_stocks, arb_status, tw_backtest_db
+from backend.hedge_monitor.providers import (
+    BingXReadOnlyClient, MaxPublicClient, SinopacReadOnlyClient
+)
+from backend.hedge_monitor.repository import HedgeRepository
+from backend.hedge_monitor.service import HedgeMonitorService
 
 app = Flask(__name__)
 log_dir = os.path.join(APP_DIR, 'log')
@@ -36,6 +44,21 @@ logging.basicConfig(
 # 載入設定（金鑰命名已正規化，並判斷是否進入 demo 模式）
 config = load_config()
 DEMO_MODE = config.get('demo_mode', False)
+
+hedge_repository = HedgeRepository(
+    os.getenv('HEDGE_DATABASE_PATH', os.path.join(APP_DIR, 'data', 'hedge_monitor.db'))
+)
+bingx_client = BingXReadOnlyClient(
+    os.getenv('BINGX_API_KEY', config.get('bingx_api_key', '')),
+    os.getenv('BINGX_SECRET_KEY', config.get('bingx_secret_key', '')),
+)
+sinopac_client = SinopacReadOnlyClient(
+    os.getenv('SHIOAJI_API_KEY', config.get('shioaji_api_key', '')),
+    os.getenv('SHIOAJI_SECRET_KEY', config.get('shioaji_secret_key', '')),
+)
+hedge_monitor = HedgeMonitorService(
+    hedge_repository, bingx_client, sinopac_client, MaxPublicClient()
+)
 
 # 初始化 MAX client：demo 模式用模擬資料，否則連真實交易所
 if DEMO_MODE:
@@ -169,6 +192,118 @@ def trading_history():
                          strategies=strategies,
                          records=records,
                          stats=stats)
+
+
+@app.route('/hedge-monitor')
+def hedge_monitor_page():
+    return render_template('hedge_monitor.html')
+
+
+def _portfolio_payload(payload):
+    numeric_fields = (
+        'spot_quantity', 'spot_entry_price', 'spot_current_price',
+        'perp_quantity', 'perp_entry_price', 'perp_mark_price',
+        'contract_multiplier', 'shares_per_underlying', 'usdt_twd',
+        'funding_received_usdt', 'fees_twd',
+    )
+    result = dict(payload)
+    for field in numeric_fields:
+        try:
+            result[field] = float(payload.get(field, 0) or 0)
+        except (TypeError, ValueError):
+            raise ValueError('{} 必須是數字'.format(field))
+    result.setdefault('spot_broker', 'sinopac')
+    result.setdefault('perp_exchange', 'bingx')
+    result['enabled'] = str(payload.get('enabled', 'true')).lower() not in ('0', 'false', 'off')
+    return result
+
+
+@app.route('/api/hedge-portfolios', methods=['GET', 'POST'])
+def hedge_portfolios_api():
+    try:
+        if request.method == 'POST':
+            payload = request.get_json(silent=True) or request.form.to_dict()
+            portfolio_id = hedge_repository.save_portfolio(_portfolio_payload(payload))
+            return jsonify({'success': True, 'id': portfolio_id}), 201
+        refresh = request.args.get('refresh', '0') == '1'
+        portfolios = [
+            hedge_monitor.evaluate(portfolio, refresh=refresh)
+            for portfolio in hedge_repository.list_portfolios()
+        ]
+        return jsonify({
+            'success': True,
+            'portfolios': portfolios,
+            'connections': {
+                'sinopac_configured': sinopac_client.configured,
+                'bingx_configured': bingx_client.authenticated,
+            },
+        })
+    except Exception as e:
+        app.logger.exception('避險組合 API 執行失敗')
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+
+@app.route('/api/hedge-portfolios/<int:portfolio_id>', methods=['GET', 'PUT'])
+def hedge_portfolio_api(portfolio_id):
+    try:
+        current = hedge_repository.get_portfolio(portfolio_id)
+        if not current:
+            return jsonify({'success': False, 'error': '找不到避險組合'}), 404
+        if request.method == 'PUT':
+            payload = request.get_json(silent=True) or request.form.to_dict()
+            merged = dict(current)
+            merged.update(payload)
+            hedge_repository.save_portfolio(_portfolio_payload(merged), portfolio_id)
+            current = hedge_repository.get_portfolio(portfolio_id)
+        refresh = request.args.get('refresh', '0') == '1'
+        return jsonify({
+            'success': True,
+            'result': hedge_monitor.evaluate(current, refresh=refresh),
+        })
+    except Exception as e:
+        app.logger.exception('避險組合更新失敗')
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+
+@app.route('/api/hedge-portfolios/<int:portfolio_id>/snapshots')
+def hedge_portfolio_snapshots_api(portfolio_id):
+    if not hedge_repository.get_portfolio(portfolio_id):
+        return jsonify({'success': False, 'error': '找不到避險組合'}), 404
+    return jsonify({
+        'success': True,
+        'snapshots': hedge_repository.list_snapshots(
+            portfolio_id, request.args.get('limit', 100)
+        ),
+    })
+
+
+@app.route('/api/hedge-connections/bingx')
+def bingx_connection_api():
+    if not bingx_client.authenticated:
+        return jsonify({
+            'success': False, 'configured': False,
+            'error': '尚未設定 BINGX_API_KEY 與 BINGX_SECRET_KEY',
+        }), 400
+    try:
+        balance = bingx_client.get_balance()
+        positions = bingx_client.get_positions()
+        safe_balance = {
+            key: balance.get(key) for key in (
+                'asset', 'balance', 'equity', 'availableMargin',
+                'usedMargin', 'unrealizedProfit'
+            ) if balance.get(key) is not None
+        }
+        return jsonify({
+            'success': True, 'configured': True,
+            'message': 'BingX API 連線正常',
+            'balance': safe_balance,
+            'open_position_count': len(positions),
+        })
+    except Exception as e:
+        app.logger.exception('BingX API 連線測試失敗')
+        return jsonify({
+            'success': False, 'configured': True, 'error': str(e),
+        }), 502
 
 @app.route('/api/trading_history')
 def get_trading_history():

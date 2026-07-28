@@ -22,6 +22,10 @@ _ALIASES = {
     "telegram_chat_id": ["telegram_chat_id", "TELEGRAM_CHAT_ID"],
     "max_api_key": ["max_api_key", "MAX_API_KEY", "CLIENT_API_KEY", "client_api_key"],
     "max_secret_key": ["max_secret_key", "MAX_SECRET_KEY", "CLIENT_SECRET_KEY", "client_secret_key"],
+    "bingx_api_key": ["bingx_api_key", "BINGX_API_KEY"],
+    "bingx_secret_key": ["bingx_secret_key", "BINGX_SECRET_KEY"],
+    "shioaji_api_key": ["shioaji_api_key", "SHIOAJI_API_KEY"],
+    "shioaji_secret_key": ["shioaji_secret_key", "SHIOAJI_SECRET_KEY"],
 }
 
 
@@ -44,8 +48,9 @@ def load_config():
     cfg = {}
     for canon, names in _ALIASES.items():
         for n in names:
-            if raw.get(n) not in (None, ""):
-                cfg[canon] = raw[n]
+            value = os.getenv(n, raw.get(n))
+            if value not in (None, ""):
+                cfg[canon] = value
                 break
         cfg.setdefault(canon, "")
 
