@@ -17,8 +17,8 @@ PORTFOLIO_FIELDS = (
 # 通用美元多腿對比（多腿手動、空腿配對 BingX；已實現用手動基準避免換單失真）
 USD_LEG_FIELDS = (
     "label", "broker", "quantity", "avg_price", "current_price",
-    "pair_exchange", "pair_symbol", "delta_factor", "baseline_realized_usd",
-    "entry_date", "note",
+    "price_symbol", "pair_exchange", "pair_symbol", "delta_factor",
+    "baseline_realized_usd", "entry_date", "note",
 )
 
 
@@ -75,6 +75,7 @@ class HedgeRepository:
                     quantity REAL NOT NULL DEFAULT 0,
                     avg_price REAL NOT NULL DEFAULT 0,
                     current_price REAL NOT NULL DEFAULT 0,
+                    price_symbol TEXT,
                     pair_exchange TEXT NOT NULL DEFAULT 'bingx',
                     pair_symbol TEXT NOT NULL,
                     delta_factor REAL NOT NULL DEFAULT 1,
@@ -100,6 +101,9 @@ class HedgeRepository:
             )}
             if "entry_date" not in existing:
                 connection.execute("ALTER TABLE usd_hedge_legs ADD COLUMN entry_date TEXT")
+            if "price_symbol" not in existing:
+                # 自動報價代號（如 SLV）；留空則沿用手動輸入的 current_price
+                connection.execute("ALTER TABLE usd_hedge_legs ADD COLUMN price_symbol TEXT")
             if "pair_exchange" not in existing:
                 # 既有資料都是 BingX 空腿，補上預設值
                 connection.execute(

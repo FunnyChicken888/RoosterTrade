@@ -18,7 +18,7 @@ from backend.strategies.strategy_manager import StrategyManager
 from backend.utils.trading_record import TradingRecord
 from backend.utils.config_loader import load_config
 from backend.utils.paths import APP_DIR
-from backend.services import twse_data, tw_backtest, twse_stocks, tw_backtest_db
+from backend.services import twse_data, tw_backtest, twse_stocks, tw_backtest_db, us_quote
 from backend.arb_monitor import risk_engine
 from backend.hedge_monitor.providers import (
     BinanceReadOnlyClient, BingXReadOnlyClient, MaxPublicClient, SinopacReadOnlyClient
@@ -483,6 +483,7 @@ def _usd_leg_payload(payload):
             raise ValueError('{} 必須是數字'.format(field))
     if not result.get('delta_factor'):
         result['delta_factor'] = 1
+    result['price_symbol'] = str(payload.get('price_symbol') or '').strip().upper() or None
     exchange = str(result.get('pair_exchange') or 'bingx').lower()
     if exchange not in PERP_CLIENTS:
         raise ValueError('不支援的交易所：{}'.format(exchange))
@@ -512,6 +513,18 @@ def _usd_leg_metrics(leg):
     current = _to_float(leg.get('current_price'))
     factor = _to_float(leg.get('delta_factor'), 1.0) or 1.0
     baseline = _to_float(leg.get('baseline_realized_usd'))
+
+    # 有設定報價代號（如 SLV）就抓即時市價，取代手動輸入的現價
+    quote = None
+    quote_error = None
+    if leg.get('price_symbol'):
+        try:
+            quote = us_quote.get_quote(leg['price_symbol'])
+            current = quote['price']
+        except Exception as error:
+            quote_error = str(error)
+            app.logger.warning('取得 %s 報價失敗：%s', leg.get('price_symbol'), error)
+
     long_value = quantity * current
     long_pnl = quantity * (current - avg)
     cost_basis = quantity * avg
@@ -561,6 +574,9 @@ def _usd_leg_metrics(leg):
         'long_value': long_value,
         'long_pnl': long_pnl,
         'cost_basis': cost_basis,
+        'current_price_used': current,
+        'quote': quote,
+        'quote_error': quote_error,
         'baseline_realized_usd': baseline,
         'short': short,
         'short_true_total': short_true_total,
@@ -571,6 +587,16 @@ def _usd_leg_metrics(leg):
         'days_held': days_held,
         'annualized_return': annualized_return,
     }
+
+
+@app.route('/api/us-quote')
+def us_quote_api():
+    """查詢美股／ETF 即時報價（如 SLV），供手動多腿自動更新現價。"""
+    symbol = request.args.get('symbol', '')
+    try:
+        return jsonify({'success': True, 'quote': us_quote.get_quote(symbol)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
 
 
 @app.route('/api/usd-hedge-legs', methods=['GET', 'POST'])

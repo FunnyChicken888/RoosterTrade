@@ -167,6 +167,20 @@ function updateBaselineHint() {
     hint.innerHTML = `${pos.exchange_label} 參考：${realised}、未實現 ${money.format(pos.unrealized_profit)} USDT`;
 }
 
+function quoteLine(leg, m) {
+    if (m.quote_error) {
+        return `<div class="small text-warning"><i class="fas fa-triangle-exclamation me-1"></i>${leg.price_symbol} 報價取得失敗，改用手動現價 ${money.format(leg.current_price)}</div>`;
+    }
+    if (!m.quote) {
+        return '<div class="small text-muted"><i class="fas fa-hand me-1"></i>手動現價（未設定自動報價代號）</div>';
+    }
+    const q = m.quote;
+    const chg = q.change_pct == null ? '' :
+        ` <span class="${pnlClass(q.change_pct)}">${q.change_pct >= 0 ? '+' : ''}${money.format(q.change_pct)}%</span>`;
+    const when = q.market_time ? new Date(q.market_time * 1000).toLocaleString('zh-TW') : '';
+    return `<div class="small text-muted"><span class="badge bg-info text-dark me-1">自動報價</span>${q.symbol} ${money.format(q.price)} ${q.currency}${chg} · ${q.source}${when ? ' · ' + when : ''}</div>`;
+}
+
 function renderComparison(leg) {
     const m = leg.metrics || {};
     const s = m.short;
@@ -189,7 +203,8 @@ function renderComparison(leg) {
                     <div>
                         <strong>${leg.label}</strong>
                         <span class="badge bg-success ms-1">多腿 ${leg.broker || '手動'}</span>
-                        <div class="small text-muted">${number.format(leg.quantity)} @ ${money.format(leg.avg_price)} → ${money.format(leg.current_price)} USD ｜ 配對 <span class="badge ${EXCHANGE_BADGE[leg.pair_exchange] || 'bg-secondary'}">${exLabel}</span> ${leg.pair_symbol}</div>
+                        <div class="small text-muted">${number.format(leg.quantity)} @ ${money.format(leg.avg_price)} → ${money.format(m.current_price_used)} USD ｜ 配對 <span class="badge ${EXCHANGE_BADGE[leg.pair_exchange] || 'bg-secondary'}">${exLabel}</span> ${leg.pair_symbol}</div>
+                        ${quoteLine(leg, m)}
                         ${leg.entry_date ? `<div class="small text-muted"><i class="fas fa-calendar-day me-1"></i>購入 ${leg.entry_date}｜持有 ${m.days_held == null ? '—' : m.days_held} 天</div>` : ''}
                         ${leg.note ? `<div class="small text-muted"><i class="fas fa-note-sticky me-1"></i>${leg.note}</div>` : ''}
                     </div>
@@ -270,7 +285,11 @@ async function deleteLeg(id) {
 async function editLeg(id) {
     const leg = usdLegs.find(l => String(l.id) === String(id));
     if (!leg) return;
-    const cp = prompt('更新多腿現價（USD）：', leg.current_price);
+    const ps = prompt('自動報價代號（如 SLV，留空則用手動現價）：', leg.price_symbol || '');
+    if (ps === null) return;
+    const cp = prompt(
+        ps.trim() ? '手動備用現價（USD，抓不到報價時使用）：' : '更新多腿現價（USD）：',
+        leg.current_price);
     if (cp === null) return;
     const base = prompt('更新空腿基準已實現（USD）：', leg.baseline_realized_usd);
     if (base === null) return;
@@ -279,6 +298,7 @@ async function editLeg(id) {
     await fetch(`/api/usd-hedge-legs/${id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+            price_symbol: ps.trim(),
             current_price: parseFloat(cp),
             baseline_realized_usd: parseFloat(base),
             entry_date: ed.trim(),
@@ -318,6 +338,29 @@ function syncUsdPairing() {
 }
 
 document.getElementById('pair-symbol').addEventListener('change', updateBaselineHint);
+
+// 輸入報價代號後即時查價，確認代號有效
+let quoteTimer = null;
+document.getElementById('price-symbol').addEventListener('input', event => {
+    const symbol = event.target.value.trim().toUpperCase();
+    const hint = document.getElementById('quote-hint');
+    clearTimeout(quoteTimer);
+    if (!symbol) { hint.textContent = '留空則用手動現價'; hint.className = 'form-text'; return; }
+    hint.textContent = '查詢中…';
+    hint.className = 'form-text';
+    quoteTimer = setTimeout(async () => {
+        try {
+            const res = await fetch(`/api/us-quote?symbol=${encodeURIComponent(symbol)}`);
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error);
+            hint.innerHTML = `✓ ${data.quote.symbol} ${money.format(data.quote.price)} ${data.quote.currency}`;
+            hint.className = 'form-text text-success';
+        } catch (e) {
+            hint.textContent = `查無此代號（${symbol}）`;
+            hint.className = 'form-text text-danger';
+        }
+    }, 500);
+});
 
 document.getElementById('usd-leg-form').addEventListener('submit', async event => {
     event.preventDefault();

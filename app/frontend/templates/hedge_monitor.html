@@ -51,8 +51,15 @@
                         <input name="avg_price" type="number" step="any" class="form-control" required>
                     </div>
                     <div class="col-md-2">
-                        <label class="form-label">現價（USD）</label>
-                        <input name="current_price" type="number" step="any" class="form-control" required>
+                        <label class="form-label">自動報價代號
+                            <i class="fas fa-circle-info text-muted" title="填美股/ETF 代號（如 SLV、GLD），系統會自動抓即時市價，不必手動更新。留空則使用右邊手動輸入的現價。"></i>
+                        </label>
+                        <input name="price_symbol" id="price-symbol" class="form-control" placeholder="SLV">
+                        <div class="form-text" id="quote-hint">留空則用手動現價</div>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">現價（USD，手動）</label>
+                        <input name="current_price" type="number" step="any" class="form-control" value="0">
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">配對合約空腿</label>
