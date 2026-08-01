@@ -281,6 +281,8 @@ body .daterangepicker.show-ranges .drp-calendar.left { border-left: 1px solid va
 .alert-success { background: var(--green-dim); border-color: rgba(38,208,124,0.3); color: var(--green); }
 .alert-danger { background: var(--red-dim); border-color: rgba(255,92,108,0.3); color: var(--red); }
 .alert-info { background: rgba(77,159,255,0.1); border-color: rgba(77,159,255,0.3); color: var(--blue); }
+.alert-warning { background: rgba(245,166,35,0.12); border-color: rgba(245,166,35,0.32); color: var(--accent); }
+.alert-secondary { background: var(--surface-2); border-color: var(--border-2); color: var(--text-dim); }
 
 /* ── Footer ── */
 .app-footer { margin-top: auto; border-top: 1px solid var(--border); padding: 20px 0;
@@ -300,6 +302,22 @@ body .daterangepicker.show-ranges .drp-calendar.left { border-left: 1px solid va
 }
 
 /* ── 跨市場避險監控 ── */
+/* Bootstrap 原生 .card 深色化，與其他分頁的 .panel / .stat-card 一致 */
+.card {
+    --bs-card-bg: transparent;
+    --bs-card-color: var(--text);
+    --bs-card-border-color: var(--border);
+    --bs-border-color: var(--border-2);
+    background: linear-gradient(180deg, var(--surface), var(--bg-2));
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    color: var(--text);
+}
+.card-body { color: var(--text); }
+.card-title { color: var(--text); }
+.card .text-muted, .card .small.text-muted { color: var(--text-mute) !important; }
+
 .hedge-card .metric {
     background: var(--surface-2);
     border: 1px solid var(--border);

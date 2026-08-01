@@ -6,6 +6,8 @@
     "max_secret_key": "your_max_secret_key",
     "bingx_api_key": "use_environment_variable_instead",
     "bingx_secret_key": "use_environment_variable_instead",
+    "binance_api_key": "use_environment_variable_instead",
+    "binance_secret_key": "use_environment_variable_instead",
     "shioaji_api_key": "use_environment_variable_instead",
     "shioaji_secret_key": "use_environment_variable_instead"
 }

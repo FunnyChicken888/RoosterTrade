@@ -18,9 +18,10 @@ from backend.strategies.strategy_manager import StrategyManager
 from backend.utils.trading_record import TradingRecord
 from backend.utils.config_loader import load_config
 from backend.utils.paths import APP_DIR
-from backend.services import twse_data, tw_backtest, twse_stocks, arb_status, tw_backtest_db
+from backend.services import twse_data, tw_backtest, twse_stocks, tw_backtest_db
+from backend.arb_monitor import risk_engine
 from backend.hedge_monitor.providers import (
-    BingXReadOnlyClient, MaxPublicClient, SinopacReadOnlyClient
+    BinanceReadOnlyClient, BingXReadOnlyClient, MaxPublicClient, SinopacReadOnlyClient
 )
 from backend.hedge_monitor.repository import HedgeRepository
 from backend.hedge_monitor.service import HedgeMonitorService
@@ -52,6 +53,10 @@ bingx_client = BingXReadOnlyClient(
     os.getenv('BINGX_API_KEY', config.get('bingx_api_key', '')),
     os.getenv('BINGX_SECRET_KEY', config.get('bingx_secret_key', '')),
 )
+binance_client = BinanceReadOnlyClient(
+    os.getenv('BINANCE_API_KEY', config.get('binance_api_key', '')),
+    os.getenv('BINANCE_SECRET_KEY', config.get('binance_secret_key', '')),
+)
 sinopac_client = SinopacReadOnlyClient(
     os.getenv('SHIOAJI_API_KEY', config.get('shioaji_api_key', '')),
     os.getenv('SHIOAJI_SECRET_KEY', config.get('shioaji_secret_key', '')),
@@ -59,6 +64,10 @@ sinopac_client = SinopacReadOnlyClient(
 hedge_monitor = HedgeMonitorService(
     hedge_repository, bingx_client, sinopac_client, MaxPublicClient()
 )
+
+# 支援的永續合約交易所（皆為唯讀，只讀部位不下單）
+PERP_CLIENTS = {'bingx': bingx_client, 'binance': binance_client}
+PERP_LABELS = {'bingx': 'BingX', 'binance': '幣安'}
 
 # 初始化 MAX client：demo 模式用模擬資料，否則連真實交易所
 if DEMO_MODE:
@@ -305,6 +314,327 @@ def bingx_connection_api():
             'success': False, 'configured': True, 'error': str(e),
         }), 502
 
+
+@app.route('/api/hedge-connections/binance')
+def binance_connection_api():
+    if not binance_client.authenticated:
+        return jsonify({
+            'success': False, 'configured': False,
+            'error': '尚未設定 BINANCE_API_KEY 與 BINANCE_SECRET_KEY',
+        }), 400
+    try:
+        balance = binance_client.get_balance()
+        positions = [p for p in binance_client.get_positions()
+                     if _to_float(p.get('positionAmt')) != 0]
+        safe_balance = {
+            key: balance.get(key) for key in (
+                'asset', 'balance', 'equity', 'uniMMR', 'crossWalletBalance',
+                'crossUnPnl', 'availableBalance', 'maxWithdrawAmount'
+            ) if balance.get(key) is not None
+        }
+        return jsonify({
+            'success': True, 'configured': True,
+            'message': '幣安 API 連線正常（{}）'.format(
+                '統一帳戶' if binance_client.mode == 'papi' else '一般合約帳戶'),
+            'balance': safe_balance,
+            'open_position_count': len(positions),
+        })
+    except Exception as e:
+        app.logger.exception('幣安 API 連線測試失敗')
+        return jsonify({
+            'success': False, 'configured': True, 'error': str(e),
+        }), 502
+
+
+def _to_float(value, default=0.0):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalize_position(exchange, p):
+    """把各交易所的部位欄位正規化成同一種格式（BingX / 幣安欄位名不同）。"""
+    amt = _to_float(p.get('positionAmt'))
+    if amt == 0:
+        return None  # 已平倉的殘留部位略過
+    side = str(p.get('positionSide', '')).lower()
+    if side in ('', 'both'):
+        # 幣安單向持倉模式回傳 BOTH，方向看數量正負
+        side = 'short' if amt < 0 else 'long'
+    if exchange == 'binance':
+        entry = _to_float(p.get('entryPrice'))
+        unrealized = _to_float(p.get('unRealizedProfit'))
+        realised = None                       # 幣安 positionRisk 不提供已實現
+        margin = _to_float(p.get('isolatedMargin') or p.get('initialMargin'))
+        if not margin:
+            # 統一帳戶的 positionRisk 沒有保證金欄位，用名目/槓桿估算
+            leverage = _to_float(p.get('leverage'))
+            notional = abs(_to_float(p.get('notional')))
+            if leverage:
+                margin = notional / leverage
+    else:
+        entry = _to_float(p.get('avgPrice'))
+        unrealized = _to_float(p.get('unrealizedProfit'))
+        realised = _to_float(p.get('realisedProfit'))
+        margin = _to_float(p.get('margin'))
+    return {
+        'exchange': exchange,
+        'exchange_label': PERP_LABELS.get(exchange, exchange),
+        'symbol': p.get('symbol'),
+        'side': side,
+        'position_amt': abs(amt),
+        'entry_price': entry,
+        'mark_price': _to_float(p.get('markPrice')),
+        'liquidation_price': _to_float(p.get('liquidationPrice')),
+        'unrealized_profit': unrealized,
+        'realised_profit': realised,
+        'pnl_ratio': _to_float(p.get('pnlRatio')),
+        'margin': margin,
+        'leverage': p.get('leverage'),
+    }
+
+
+def _collect_positions(exchange, client):
+    """讀取單一交易所的未平倉部位，補上資金費率與風控示警。"""
+    results = []
+    for raw in client.get_positions():
+        item = _normalize_position(exchange, raw)
+        if item is None:
+            continue
+        funding_rate = None
+        try:
+            premium = client.get_premium_index(item['symbol'])
+            funding_rate = _to_float(
+                premium.get('lastFundingRate') or premium.get('fundingRate'), None
+            )
+        except Exception:
+            app.logger.warning('讀取 %s %s 資金費率失敗', exchange, item['symbol'])
+        item['funding_rate'] = funding_rate
+        item['alerts'] = risk_engine.evaluate(
+            {
+                'label': '{} {}'.format(PERP_LABELS.get(exchange, exchange), item['symbol']),
+                'side': item['side'],
+                'liq_price': item['liquidation_price'],
+            },
+            {
+                'mark': item['mark_price'],
+                'funding_rate': funding_rate,
+                'funding_interval_hours': 8,
+            },
+        )
+        results.append(item)
+    return results
+
+
+@app.route('/api/hedge-connections/positions')
+def perp_positions_api():
+    """自動抓取所有已設定交易所（BingX／幣安）的合約部位並套用風控示警。
+
+    只讀不下單：距離強平緩衝、資金費率異常、（有近期高低時）急拉／尬空。
+    """
+    positions = []
+    connections = {}
+    errors = []
+    for exchange, client in PERP_CLIENTS.items():
+        label = PERP_LABELS.get(exchange, exchange)
+        if not client.authenticated:
+            connections[exchange] = 'unconfigured'
+            continue
+        try:
+            positions.extend(_collect_positions(exchange, client))
+            connections[exchange] = 'ok'
+        except Exception as e:
+            app.logger.exception('%s 部位讀取失敗', label)
+            connections[exchange] = 'error'
+            errors.append('{}：{}'.format(label, e))
+    if not any(state == 'ok' for state in connections.values()) and errors:
+        return jsonify({'success': False, 'error': '；'.join(errors),
+                        'connections': connections}), 502
+    return jsonify({
+        'success': True, 'positions': positions,
+        'connections': connections, 'errors': errors,
+    })
+
+
+# 舊路徑保留相容（只回 BingX）
+@app.route('/api/hedge-connections/bingx/positions')
+def bingx_positions_api():
+    if not bingx_client.authenticated:
+        return jsonify({
+            'success': False, 'configured': False,
+            'error': '尚未設定 BINGX_API_KEY 與 BINGX_SECRET_KEY',
+        }), 400
+    try:
+        return jsonify({'success': True,
+                        'positions': _collect_positions('bingx', bingx_client)})
+    except Exception as e:
+        app.logger.exception('BingX 部位讀取失敗')
+        return jsonify({'success': False, 'error': str(e)}), 502
+
+
+def _usd_leg_payload(payload):
+    numeric = ('quantity', 'avg_price', 'current_price', 'delta_factor', 'baseline_realized_usd')
+    result = dict(payload)
+    for field in numeric:
+        try:
+            result[field] = float(payload.get(field, 0) or 0)
+        except (TypeError, ValueError):
+            raise ValueError('{} 必須是數字'.format(field))
+    if not result.get('delta_factor'):
+        result['delta_factor'] = 1
+    exchange = str(result.get('pair_exchange') or 'bingx').lower()
+    if exchange not in PERP_CLIENTS:
+        raise ValueError('不支援的交易所：{}'.format(exchange))
+    result['pair_exchange'] = exchange
+    return result
+
+
+def _find_live_position(symbol, exchange='bingx'):
+    """抓取指定交易所該合約目前的未平倉部位（找不到回 None，只讀不下單）。"""
+    client = PERP_CLIENTS.get(str(exchange or 'bingx').lower())
+    if not symbol or client is None or not client.authenticated:
+        return None
+    try:
+        for p in client.get_positions(symbol):
+            if str(p.get('symbol')) == str(symbol) and _to_float(p.get('positionAmt')) != 0:
+                return _normalize_position(str(exchange).lower(), p)
+    except Exception:
+        app.logger.warning('讀取 %s 部位 %s 失敗', exchange, symbol)
+    return None
+
+
+def _usd_leg_metrics(leg):
+    """美元層面的多腿×空腿對比。空腿已實現用『手動基準』避免換單失真，
+    再加上 BingX 即時未實現，得到真實累計損益。"""
+    quantity = _to_float(leg.get('quantity'))
+    avg = _to_float(leg.get('avg_price'))
+    current = _to_float(leg.get('current_price'))
+    factor = _to_float(leg.get('delta_factor'), 1.0) or 1.0
+    baseline = _to_float(leg.get('baseline_realized_usd'))
+    long_value = quantity * current
+    long_pnl = quantity * (current - avg)
+    cost_basis = quantity * avg
+
+    exchange = str(leg.get('pair_exchange') or 'bingx').lower()
+    pos = _find_live_position(leg.get('pair_symbol'), exchange)
+    short = None
+    net_exposure = None
+    hedge_ratio = None
+    short_unrealized = 0.0
+    if pos:
+        amt = pos['position_amt']
+        mark = pos['mark_price']
+        short_unrealized = pos['unrealized_profit']
+        short_notional = amt * mark
+        short_exposure = short_notional * factor
+        net_exposure = long_value - short_exposure
+        hedge_ratio = short_exposure / long_value if long_value else None
+        short = {
+            'exchange': pos['exchange'],
+            'exchange_label': pos['exchange_label'],
+            'position_amt': amt,
+            'mark_price': mark,
+            'unrealized_profit': short_unrealized,
+            'realised_profit_auto': pos.get('realised_profit'),
+            'short_notional': short_notional,
+            'short_exposure': short_exposure,
+        }
+    short_true_total = baseline + short_unrealized
+    combined_pnl = long_pnl + short_true_total
+
+    # 持有期間與年化報酬（以多腿成本 = 數量×均價 為基準）
+    period_return = combined_pnl / cost_basis if cost_basis else None
+    days_held = None
+    annualized_return = None
+    entry_date = leg.get('entry_date')
+    if entry_date:
+        try:
+            start = datetime.strptime(str(entry_date)[:10], '%Y-%m-%d')
+            days_held = (datetime.now() - start).days
+            if days_held and days_held >= 1 and period_return is not None:
+                annualized_return = period_return * 365.0 / days_held
+        except ValueError:
+            app.logger.warning('無法解析購入時間：%s', entry_date)
+
+    return {
+        'long_value': long_value,
+        'long_pnl': long_pnl,
+        'cost_basis': cost_basis,
+        'baseline_realized_usd': baseline,
+        'short': short,
+        'short_true_total': short_true_total,
+        'combined_pnl': combined_pnl,
+        'net_exposure': net_exposure,
+        'hedge_ratio': hedge_ratio,
+        'period_return': period_return,
+        'days_held': days_held,
+        'annualized_return': annualized_return,
+    }
+
+
+@app.route('/api/usd-hedge-legs', methods=['GET', 'POST'])
+def usd_hedge_legs_api():
+    try:
+        if request.method == 'POST':
+            payload = request.get_json(silent=True) or request.form.to_dict()
+            leg_id = hedge_repository.save_usd_leg(_usd_leg_payload(payload))
+            return jsonify({'success': True, 'id': leg_id}), 201
+        legs = [
+            {**leg, 'metrics': _usd_leg_metrics(leg)}
+            for leg in hedge_repository.list_usd_legs()
+        ]
+        return jsonify({
+            'success': True, 'legs': legs,
+            'bingx_configured': bingx_client.authenticated,
+            'binance_configured': binance_client.authenticated,
+        })
+    except Exception as e:
+        app.logger.exception('USD 多腿對比 API 失敗')
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+
+@app.route('/api/usd-hedge-legs/<int:leg_id>', methods=['PUT', 'DELETE'])
+def usd_hedge_leg_api(leg_id):
+    try:
+        current = hedge_repository.get_usd_leg(leg_id)
+        if not current:
+            return jsonify({'success': False, 'error': '找不到多腿對比'}), 404
+        if request.method == 'DELETE':
+            hedge_repository.delete_usd_leg(leg_id)
+            return jsonify({'success': True})
+        payload = request.get_json(silent=True) or request.form.to_dict()
+        merged = dict(current)
+        merged.update(payload)
+        hedge_repository.save_usd_leg(_usd_leg_payload(merged), leg_id)
+        return jsonify({'success': True})
+    except Exception as e:
+        app.logger.exception('USD 多腿對比更新失敗')
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+
+@app.route('/api/usd-hedge-legs/<int:leg_id>/snapshot', methods=['POST'])
+def usd_hedge_leg_snapshot_api(leg_id):
+    leg = hedge_repository.get_usd_leg(leg_id)
+    if not leg:
+        return jsonify({'success': False, 'error': '找不到多腿對比'}), 404
+    metrics = _usd_leg_metrics(leg)
+    hedge_repository.add_usd_snapshot(leg_id, {'leg': leg, 'metrics': metrics})
+    return jsonify({'success': True, 'metrics': metrics})
+
+
+@app.route('/api/usd-hedge-legs/<int:leg_id>/snapshots')
+def usd_hedge_leg_snapshots_api(leg_id):
+    if not hedge_repository.get_usd_leg(leg_id):
+        return jsonify({'success': False, 'error': '找不到多腿對比'}), 404
+    return jsonify({
+        'success': True,
+        'snapshots': hedge_repository.list_usd_snapshots(
+            leg_id, request.args.get('limit', 100)
+        ),
+    })
+
+
 @app.route('/api/trading_history')
 def get_trading_history():
     """獲取交易歷史記錄的API"""
@@ -365,28 +695,6 @@ def get_strategies():
 def backtest_page():
     """台股回測頁面：用真實台股行情 + 台股費稅模擬定值再平衡策略。"""
     return render_template('backtest.html')
-
-
-@app.route('/arb')
-def arb_page():
-    """套利風控監控儀表板（只示警、絕不下單）。"""
-    return render_template('arb.html')
-
-
-@app.route('/api/arb_status')
-def api_arb_status():
-    """回傳各空腿的距離強平／資金費率／急拉指標與示警等級，供前端輪詢。"""
-    try:
-        snap = arb_status.get_snapshot()
-        return jsonify({"success": True, **snap})
-    except FileNotFoundError:
-        return jsonify({"success": False,
-                        "error": "找不到 config/arb_monitor.json，請先依範本建立設定檔"})
-    except json.JSONDecodeError as e:
-        return jsonify({"success": False, "error": f"設定檔格式錯誤：{e}"})
-    except Exception as e:
-        app.logger.error(f"取得套利風控狀態失敗: {e}")
-        return jsonify({"success": False, "error": str(e)})
 
 
 @app.route('/api/tw_stocks')

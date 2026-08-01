@@ -4,11 +4,11 @@
 {% block content %}
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
             <div>
-                <h1 class="mb-1">跨市場避險監控</h1>
-                <p class="text-muted mb-0">現貨多單、永續空單、資金費與匯率統一換算為 TWD</p>
+                <h1 class="mb-1">跨市場避險 / 風控監控</h1>
+                <p class="text-muted mb-0">自動抓取 BingX／幣安合約部位（多腿／空腿）、風控示警，並與手動多腿做美元對比</p>
             </div>
             <div class="d-flex gap-2">
-                <button id="test-bingx" class="btn btn-outline-primary">測試 BingX 連線</button>
+                <button id="test-bingx" class="btn btn-outline-primary">測試交易所連線</button>
                 <button id="refresh-live" class="btn btn-primary">同步帳戶與行情</button>
             </div>
         </div>
@@ -18,7 +18,78 @@
 
         <section class="card mb-4">
             <div class="card-body">
-                <h5 class="card-title">新增避險組合</h5>
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                    <h5 class="card-title mb-0">交易所合約部位（自動抓取）</h5>
+                    <button id="refresh-bingx-positions" class="btn btn-sm btn-outline-secondary">重新讀取部位</button>
+                </div>
+                <p class="small text-muted mb-3">直接讀取你在 BingX／幣安合約帳戶的多腿／空腿，附上距離強平、資金費率與急拉風控示警（只讀不下單）。</p>
+                <div id="bingx-positions"><div class="text-muted small">尚未讀取。</div></div>
+            </div>
+        </section>
+
+        <section class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">手動多腿 × 合約空腿（USD 對比）</h5>
+                <p class="small text-muted mb-3">
+                    多腿（例如放在 Firstrade 的白銀，無 API）手動輸入，系統會跟即時自動抓取的 BingX／幣安空腿在<strong>美元</strong>層面配對，計算淨美元曝險、避險率、合併損益與年化報酬。資料存在伺服器（可跨裝置、重啟不遺失）。
+                </p>
+                <form id="usd-leg-form" class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">多腿標的</label>
+                        <input name="label" class="form-control" placeholder="例：SLV / 白銀" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">券商</label>
+                        <input name="broker" class="form-control" value="Firstrade">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">數量（股/單位）</label>
+                        <input name="quantity" type="number" step="any" class="form-control" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">均價（USD）</label>
+                        <input name="avg_price" type="number" step="any" class="form-control" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">現價（USD）</label>
+                        <input name="current_price" type="number" step="any" class="form-control" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">配對合約空腿</label>
+                        <select name="pair_symbol" id="pair-symbol" class="form-select" required></select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">空腿曝險倍數
+                            <i class="fas fa-circle-info text-muted" title="槓桿型商品（如 2x 白銀）填 2，一般填 1。只影響淨曝險/避險率的等值換算。"></i>
+                        </label>
+                        <input name="delta_factor" type="number" step="any" class="form-control" value="1">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">空腿已實現基準（USD）
+                            <i class="fas fa-circle-info text-muted" title="因為反覆換單平倉，交易所回傳的均價已失真。請填入你信任的累計已實現損益，系統會再加上即時未實現。"></i>
+                        </label>
+                        <input name="baseline_realized_usd" type="number" step="any" class="form-control" value="0">
+                        <div class="form-text" id="baseline-hint">交易所參考值：選擇空腿後顯示</div>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">購入時間</label>
+                        <input name="entry_date" type="date" class="form-control">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">備註</label>
+                        <input name="note" class="form-control" placeholder="例：基準取自 2026-07 對帳單">
+                    </div>
+                    <div class="col-12">
+                        <button class="btn btn-success" type="submit">新增多腿對比（存到伺服器）</button>
+                    </div>
+                </form>
+                <div id="usd-comparisons" class="row mt-2"></div>
+            </div>
+        </section>
+
+        <section class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">新增避險組合（台股 / TWD）</h5>
                 <p class="small text-muted">未設定 API Key 時仍可使用手動數值。TSMU 預設一單位對應一個 TSM ADS，而一個 ADS 對應 5 股台積電；正式使用前仍應核對 BingX 商品規格。</p>
                 <form id="portfolio-form" class="row g-3">
                     <div class="col-md-4">

@@ -24,6 +24,8 @@ _ALIASES = {
     "max_secret_key": ["max_secret_key", "MAX_SECRET_KEY", "CLIENT_SECRET_KEY", "client_secret_key"],
     "bingx_api_key": ["bingx_api_key", "BINGX_API_KEY"],
     "bingx_secret_key": ["bingx_secret_key", "BINGX_SECRET_KEY"],
+    "binance_api_key": ["binance_api_key", "BINANCE_API_KEY"],
+    "binance_secret_key": ["binance_secret_key", "BINANCE_SECRET_KEY"],
     "shioaji_api_key": ["shioaji_api_key", "SHIOAJI_API_KEY"],
     "shioaji_secret_key": ["shioaji_secret_key", "SHIOAJI_SECRET_KEY"],
 }
