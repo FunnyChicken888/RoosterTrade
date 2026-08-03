@@ -8,6 +8,19 @@ class TelegramNotifier:
         self.chat_id = chat_id
         self.logger = logging.getLogger("TelegramNotifier")
 
+    def send_text(self, text: str) -> bool:
+        """發送純文字通知（風控示警、自動補保證金等共用）。"""
+        url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+        try:
+            response = requests.post(url, json={
+                'chat_id': self.chat_id, 'text': text, 'parse_mode': 'HTML',
+            }, timeout=15)
+            response.raise_for_status()
+            return True
+        except Exception as e:
+            self.logger.error(f"發送通知失敗: {e}")
+            return False
+
     def send_trade_confirmation(self, strategy_name: str, action: str, volume: float, coin_type: str, price: float, trade_id: str):
         """發送交易確認請求"""
         message = (

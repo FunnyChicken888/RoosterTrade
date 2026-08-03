@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import json
 import logging
 import time
 from typing import Any, Dict, List, Optional
@@ -363,6 +364,69 @@ class PionexReadOnlyClient:
                 "total": free + frozen,
             })
         return sorted(result, key=lambda r: -r["total"])
+
+
+class PionexTransferClient(PionexReadOnlyClient):
+    """在唯讀能力之上，只多開「站內 MAIN → TRADE 劃轉」這一個寫入動作。
+
+    刻意獨立成一個類別，讓 PionexReadOnlyClient 維持真的唯讀。
+    這裡永遠不會提領到站外（派網 API 也沒有提領端點），
+    也不提供 TRADE → MAIN 的反向劃轉，把可能的破壞面縮到最小。
+    需要金鑰額外開啟 Transfer 權限。
+    """
+
+    def _signed_post(self, path: str, params: Dict[str, Any]):
+        if not self.authenticated:
+            raise RuntimeError("尚未設定派網 API Key")
+        query = {"timestamp": int(time.time() * 1000)}
+        sorted_query = "&".join("{}={}".format(k, query[k]) for k in sorted(query))
+        path_url = "{}?{}".format(path, sorted_query)
+        body = json.dumps(params, separators=(",", ":"))
+        signature = hmac.new(
+            self.secret_key.encode("utf-8"),
+            ("POST" + path_url + body).encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        headers = {
+            "PIONEX-KEY": self.api_key,
+            "PIONEX-SIGNATURE": signature,
+            "Content-Type": "application/json",
+        }
+        response = self.session.post(
+            self.BASE_URL + path_url, data=body, headers=headers, timeout=self.timeout
+        )
+        payload = response.json()
+        if not payload.get("result", False):
+            raise RuntimeError(
+                "派網劃轉失敗 {}：{}".format(
+                    payload.get("code", ""), payload.get("message") or payload
+                )
+            )
+        return payload.get("data") or {}
+
+    def transfer_main_to_trade(self, amount, currency="USDT", client_id=None, comment=""):
+        """把主帳戶資金劃到合約帳戶（單向，只進不出）。"""
+        amount = float(amount)
+        if amount <= 0:
+            raise ValueError("劃轉金額必須大於 0")
+        params = {
+            "fromAccount": "MAIN",
+            "toAccount": "TRADE",
+            "currency": currency,
+            "amount": str(amount),
+        }
+        if client_id:
+            params["clientId"] = str(client_id)
+        if comment:
+            params["comment"] = str(comment)[:32]
+        return self._signed_post("/api/v1/assets/transfer", params)
+
+    def get_main_balance(self, coin="USDT"):
+        """主帳戶（現貨）可用餘額，判斷夠不夠劃轉。"""
+        for row in self.get_balances(hide_zero=False):
+            if str(row.get("coin", "")).upper() == coin.upper():
+                return row
+        return {"coin": coin, "free": 0.0, "frozen": 0.0, "total": 0.0}
 
 
 class SinopacReadOnlyClient:

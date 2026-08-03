@@ -19,10 +19,15 @@ from backend.utils.trading_record import TradingRecord
 from backend.utils.config_loader import load_config
 from backend.utils.paths import APP_DIR
 from backend.services import twse_data, tw_backtest, twse_stocks, tw_backtest_db, us_quote
+from backend.services.risk_watcher import RiskWatcher
+from backend.services.funding_rates import (
+    FundingRateStore, FundingCollector, RWA_GROUPS
+)
+from backend.utils.notification import TelegramNotifier
 from backend.arb_monitor import risk_engine
 from backend.hedge_monitor.providers import (
     BinanceReadOnlyClient, BingXReadOnlyClient, MaxPublicClient,
-    PionexReadOnlyClient, SinopacReadOnlyClient
+    PionexReadOnlyClient, PionexTransferClient, SinopacReadOnlyClient
 )
 from backend.hedge_monitor.repository import HedgeRepository
 from backend.hedge_monitor.service import HedgeMonitorService
@@ -860,6 +865,139 @@ def api_backtest_tw_db():
     except Exception as e:
         app.logger.error(f"查詢台股回測資料庫失敗: {e}")
         return jsonify({"success": False, "error": str(e), "rows": [], "total": 0})
+
+
+def _truthy(value):
+    return str(value).lower() in ('1', 'true', 'yes', 'on')
+
+
+def _collect_all_positions():
+    """巡檢用：彙整所有已設定交易所的部位（單一交易所失敗不影響其他）。"""
+    positions = []
+    for exchange, exchange_client in PERP_CLIENTS.items():
+        if not exchange_client.authenticated:
+            continue
+        try:
+            positions.extend(_collect_positions(exchange, exchange_client))
+        except Exception:
+            app.logger.exception('%s 巡檢讀取部位失敗', exchange)
+    return positions
+
+
+def _build_risk_watcher():
+    """建立風控巡檢器：Telegram 示警 +（選用）派網站內自動補保證金。"""
+    notifier = None
+    if config.get('telegram_bot_token') and config.get('telegram_chat_id'):
+        notifier = TelegramNotifier(config['telegram_bot_token'], config['telegram_chat_id'])
+    else:
+        app.logger.warning('未設定 Telegram 金鑰，風控示警將只寫入日誌')
+
+    transfer_client = None
+    if _truthy(config.get('pionex_auto_topup')):
+        if pionex_client.authenticated:
+            transfer_client = PionexTransferClient(
+                config.get('pionex_api_key', ''), config.get('pionex_secret_key', ''))
+            app.logger.warning(
+                '派網自動補保證金已啟用：僅站內 MAIN→TRADE，單筆上限 %s、每日上限 %s USDT',
+                config.get('pionex_topup_amount', 200),
+                config.get('pionex_topup_daily_cap', 1000))
+        else:
+            app.logger.warning('已要求派網自動補保證金，但未設定派網金鑰，功能不會啟動')
+
+    return RiskWatcher(_collect_all_positions, notifier, transfer_client, config)
+
+
+risk_watcher = _build_risk_watcher()
+if _truthy(os.getenv('ROOSTER_DISABLE_WATCHER', '')):
+    app.logger.warning('ROOSTER_DISABLE_WATCHER 已設定，風控巡檢不啟動')
+else:
+    risk_watcher.start()
+
+
+funding_store = FundingRateStore(
+    os.getenv('FUNDING_DATABASE_PATH', os.path.join(APP_DIR, 'data', 'funding_rates.db'))
+)
+funding_collector = FundingCollector(
+    funding_store, int(config.get('funding_collect_interval', 1800) or 1800)
+)
+if not _truthy(os.getenv('ROOSTER_DISABLE_WATCHER', '')):
+    funding_collector.start()
+
+
+@app.route('/api/funding/latest')
+def funding_latest_api():
+    """各合約最新資金費率，預設依年化由高到低（年化正值＝做空方收取）。"""
+    return jsonify({
+        'success': True,
+        'rows': funding_store.latest(
+            rwa_only=request.args.get('rwa') == '1',
+            exchange=request.args.get('exchange'),
+            limit=request.args.get('limit', 200),
+            order=request.args.get('order', 'apr'),
+        ),
+    })
+
+
+@app.route('/api/funding/history')
+def funding_history_api():
+    exchange = request.args.get('exchange', '')
+    symbol = request.args.get('symbol', '')
+    if not exchange or not symbol:
+        return jsonify({'success': False, 'error': '需要 exchange 與 symbol'}), 400
+    return jsonify({
+        'success': True,
+        'rows': funding_store.history(exchange, symbol, request.args.get('limit', 500)),
+        'stats': funding_store.stats(exchange, symbol, int(request.args.get('days', 30))),
+    })
+
+
+@app.route('/api/funding/groups')
+def funding_groups_api():
+    """把同一標的（SLV / 黃金 / 台積電…）在各交易所的年化並列比較。"""
+    return jsonify({
+        'success': True,
+        'groups': funding_store.group_compare(int(request.args.get('days', 30))),
+        'defined_groups': list(RWA_GROUPS.keys()),
+    })
+
+
+@app.route('/api/funding/summary')
+def funding_summary_api():
+    return jsonify({
+        'success': True,
+        'summary': funding_store.summary(),
+        'interval_seconds': funding_collector.interval,
+    })
+
+
+@app.route('/api/funding/collect', methods=['POST'])
+def funding_collect_api():
+    return jsonify({'success': True, **funding_collector.collect_once()})
+
+
+@app.route('/api/risk-watch/check', methods=['POST'])
+def risk_watch_check_api():
+    """立即巡檢一次（供手動測試示警推播）。"""
+    try:
+        return jsonify({'success': True, 'alerts_sent': risk_watcher.check_once()})
+    except Exception as e:
+        app.logger.exception('手動巡檢失敗')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/risk-watch/status')
+def risk_watch_status_api():
+    return jsonify({
+        'success': True,
+        'interval_seconds': risk_watcher.interval,
+        'alert_cooldown_seconds': risk_watcher.alert_cooldown,
+        'telegram_configured': risk_watcher.notifier is not None,
+        'pionex_auto_topup': risk_watcher.topup_enabled and risk_watcher.pionex is not None,
+        'topup_buffer_pct': risk_watcher.topup_buffer_pct,
+        'topup_amount': risk_watcher.topup_amount,
+        'topup_daily_cap': risk_watcher.topup_daily_cap,
+        'topup_used_today': risk_watcher._topup_today,
+    })
 
 
 if __name__ == '__main__':
