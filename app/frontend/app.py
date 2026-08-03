@@ -21,7 +21,8 @@ from backend.utils.paths import APP_DIR
 from backend.services import twse_data, tw_backtest, twse_stocks, tw_backtest_db, us_quote
 from backend.arb_monitor import risk_engine
 from backend.hedge_monitor.providers import (
-    BinanceReadOnlyClient, BingXReadOnlyClient, MaxPublicClient, SinopacReadOnlyClient
+    BinanceReadOnlyClient, BingXReadOnlyClient, MaxPublicClient,
+    PionexReadOnlyClient, SinopacReadOnlyClient
 )
 from backend.hedge_monitor.repository import HedgeRepository
 from backend.hedge_monitor.service import HedgeMonitorService
@@ -65,9 +66,18 @@ hedge_monitor = HedgeMonitorService(
     hedge_repository, bingx_client, sinopac_client, MaxPublicClient()
 )
 
+pionex_client = PionexReadOnlyClient(
+    os.getenv('PIONEX_API_KEY', config.get('pionex_api_key', '')),
+    os.getenv('PIONEX_SECRET_KEY', config.get('pionex_secret_key', '')),
+)
+
 # 支援的永續合約交易所（皆為唯讀，只讀部位不下單）
-PERP_CLIENTS = {'bingx': bingx_client, 'binance': binance_client}
-PERP_LABELS = {'bingx': 'BingX', 'binance': '幣安'}
+PERP_CLIENTS = {
+    'bingx': bingx_client,
+    'binance': binance_client,
+    'pionex': pionex_client,
+}
+PERP_LABELS = {'bingx': 'BingX', 'binance': '幣安', 'pionex': '派網'}
 
 # 初始化 MAX client：demo 模式用模擬資料，否則連真實交易所
 if DEMO_MODE:
@@ -346,6 +356,31 @@ def binance_connection_api():
         }), 502
 
 
+@app.route('/api/hedge-connections/pionex')
+def pionex_connection_api():
+    if not pionex_client.authenticated:
+        return jsonify({
+            'success': False, 'configured': False,
+            'error': '尚未設定 PIONEX_API_KEY 與 PIONEX_SECRET_KEY',
+        }), 400
+    try:
+        balance = pionex_client.get_futures_balance()
+        positions = [p for p in pionex_client.get_positions()
+                     if float(p.get('netSize') or 0) != 0]
+        return jsonify({
+            'success': True, 'configured': True,
+            'message': '派網 API 連線正常',
+            'balance': {k: balance.get(k) for k in ('coin', 'free', 'frozen', 'available')
+                        if balance.get(k) is not None},
+            'open_position_count': len(positions),
+        })
+    except Exception as e:
+        app.logger.exception('派網 API 連線測試失敗')
+        return jsonify({
+            'success': False, 'configured': True, 'error': str(e),
+        }), 502
+
+
 def _to_float(value, default=0.0):
     try:
         return float(value)
@@ -354,15 +389,21 @@ def _to_float(value, default=0.0):
 
 
 def _normalize_position(exchange, p):
-    """把各交易所的部位欄位正規化成同一種格式（BingX / 幣安欄位名不同）。"""
-    amt = _to_float(p.get('positionAmt'))
+    """把各交易所的部位欄位正規化成同一種格式（BingX／幣安／派網欄位名皆不同）。"""
+    # 派網用 netSize，其餘用 positionAmt
+    amt = _to_float(p.get('netSize') if exchange == 'pionex' else p.get('positionAmt'))
     if amt == 0:
         return None  # 已平倉的殘留部位略過
     side = str(p.get('positionSide', '')).lower()
     if side in ('', 'both'):
         # 幣安單向持倉模式回傳 BOTH，方向看數量正負
         side = 'short' if amt < 0 else 'long'
-    if exchange == 'binance':
+    if exchange == 'pionex':
+        entry = _to_float(p.get('avgPrice'))
+        unrealized = _to_float(p.get('unrealizedPnL'))
+        realised = None                       # 派網 positions 不提供已實現
+        margin = _to_float(p.get('initialMargin'))
+    elif exchange == 'binance':
         entry = _to_float(p.get('entryPrice'))
         unrealized = _to_float(p.get('unRealizedProfit'))
         realised = None                       # 幣安 positionRisk 不提供已實現
@@ -403,13 +444,15 @@ def _collect_positions(exchange, client):
         if item is None:
             continue
         funding_rate = None
-        try:
-            premium = client.get_premium_index(item['symbol'])
-            funding_rate = _to_float(
-                premium.get('lastFundingRate') or premium.get('fundingRate'), None
-            )
-        except Exception:
-            app.logger.warning('讀取 %s %s 資金費率失敗', exchange, item['symbol'])
+        premium_fn = getattr(client, 'get_premium_index', None)
+        if premium_fn is not None:      # 派網未提供資金費率端點，略過
+            try:
+                premium = premium_fn(item['symbol'])
+                funding_rate = _to_float(
+                    premium.get('lastFundingRate') or premium.get('fundingRate'), None
+                )
+            except Exception:
+                app.logger.warning('讀取 %s %s 資金費率失敗', exchange, item['symbol'])
         item['funding_rate'] = funding_rate
         item['alerts'] = risk_engine.evaluate(
             {

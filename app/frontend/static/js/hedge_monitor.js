@@ -62,8 +62,8 @@ function topLevel(alerts) {
     return null;
 }
 
-const EXCHANGE_BADGE = { bingx: 'bg-primary', binance: 'bg-warning text-dark' };
-const EXCHANGE_LABEL = { bingx: 'BingX', binance: '幣安' };
+const EXCHANGE_BADGE = { bingx: 'bg-primary', binance: 'bg-warning text-dark', pionex: 'bg-success' };
+const EXCHANGE_LABEL = { bingx: 'BingX', binance: '幣安', pionex: '派網' };
 
 function renderBingxPosition(p) {
     const sideBadge = p.side === 'short'
@@ -436,7 +436,7 @@ document.getElementById('test-bingx').addEventListener('click', async event => {
     button.disabled = true;
     button.textContent = '測試中…';
     try {
-        const results = await Promise.all(['bingx', 'binance'].map(async ex => {
+        const results = await Promise.all(['bingx', 'binance', 'pionex'].map(async ex => {
             try {
                 const res = await fetch(`/api/hedge-connections/${ex}`);
                 const data = await res.json();

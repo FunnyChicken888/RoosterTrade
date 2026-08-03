@@ -5,7 +5,7 @@
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
             <div>
                 <h1 class="mb-1">跨市場避險 / 風控監控</h1>
-                <p class="text-muted mb-0">自動抓取 BingX／幣安合約部位（多腿／空腿）、風控示警，並與手動多腿做美元對比</p>
+                <p class="text-muted mb-0">自動抓取 BingX／幣安／派網合約部位（多腿／空腿）、風控示警，並與手動多腿做美元對比</p>
             </div>
             <div class="d-flex gap-2">
                 <button id="test-bingx" class="btn btn-outline-primary">測試交易所連線</button>
@@ -22,7 +22,7 @@
                     <h5 class="card-title mb-0">交易所合約部位（自動抓取）</h5>
                     <button id="refresh-bingx-positions" class="btn btn-sm btn-outline-secondary">重新讀取部位</button>
                 </div>
-                <p class="small text-muted mb-3">直接讀取你在 BingX／幣安合約帳戶的多腿／空腿，附上距離強平、資金費率與急拉風控示警（只讀不下單）。</p>
+                <p class="small text-muted mb-3">直接讀取你在 BingX／幣安／派網合約帳戶的多腿／空腿，附上距離強平、資金費率與急拉風控示警（只讀不下單）。</p>
                 <div id="bingx-positions"><div class="text-muted small">尚未讀取。</div></div>
             </div>
         </section>
@@ -31,7 +31,7 @@
             <div class="card-body">
                 <h5 class="card-title">手動多腿 × 合約空腿（USD 對比）</h5>
                 <p class="small text-muted mb-3">
-                    多腿（例如放在 Firstrade 的白銀，無 API）手動輸入，系統會跟即時自動抓取的 BingX／幣安空腿在<strong>美元</strong>層面配對，計算淨美元曝險、避險率、合併損益與年化報酬。資料存在伺服器（可跨裝置、重啟不遺失）。
+                    多腿（例如放在 Firstrade 的白銀，無 API）手動輸入，系統會跟即時自動抓取的 BingX／幣安／派網空腿在<strong>美元</strong>層面配對，計算淨美元曝險、避險率、合併損益與年化報酬。資料存在伺服器（可跨裝置、重啟不遺失）。
                 </p>
                 <form id="usd-leg-form" class="row g-3">
                     <div class="col-md-3">

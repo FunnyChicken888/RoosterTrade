@@ -262,6 +262,109 @@ class BinanceReadOnlyClient:
         return data or {}
 
 
+class PionexReadOnlyClient:
+    """派網（Pionex）唯讀 client：讀合約部位／餘額／資金費，不下單。
+
+    合約 API 走 /uapi/v1/*（官方文件標示 Invite only，需先開通合約 API 權限）；
+    現貨餘額走 /api/v1/*，且官方註明「不含機器人與理財帳戶」。
+    兩者同一個 host、同一套簽名與回應格式。
+
+    簽名（依官方文件）：
+      1. timestamp（毫秒）放進 query
+      2. 參數依 key 的 ASCII 升冪排序、以 & 串接，且不做 URL encode
+      3. PATH_URL = path + "?" + 排序後參數
+      4. signature = HMAC_SHA256(secret, METHOD + PATH_URL) 的 hex
+      5. 帶入 PIONEX-KEY / PIONEX-SIGNATURE 標頭
+    """
+
+    BASE_URL = "https://api.pionex.com"
+
+    def __init__(self, api_key: str = "", secret_key: str = "", timeout: int = 10):
+        self.api_key = api_key or ""
+        self.secret_key = secret_key or ""
+        self.timeout = timeout
+        self.session = requests.Session()
+        self.logger = logging.getLogger("pionex_read_only")
+
+    @property
+    def authenticated(self) -> bool:
+        return bool(self.api_key and self.secret_key)
+
+    def _signed_get(self, path: str, params: Optional[Dict[str, Any]] = None):
+        if not self.authenticated:
+            raise RuntimeError("尚未設定派網唯讀 API Key")
+        query = dict(params or {})
+        query["timestamp"] = int(time.time() * 1000)
+        # 簽名用的字串不可 URL encode，且需與實際送出的 query 完全一致
+        sorted_query = "&".join("{}={}".format(k, query[k]) for k in sorted(query))
+        path_url = "{}?{}".format(path, sorted_query)
+        signature = hmac.new(
+            self.secret_key.encode("utf-8"),
+            ("GET" + path_url).encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        headers = {"PIONEX-KEY": self.api_key, "PIONEX-SIGNATURE": signature}
+        response = self.session.get(
+            self.BASE_URL + path_url, headers=headers, timeout=self.timeout
+        )
+        try:
+            payload = response.json()
+        except ValueError:
+            response.raise_for_status()
+            raise
+        if not payload.get("result", False):
+            raise RuntimeError(
+                "派網 API 錯誤 {}：{}".format(
+                    payload.get("code", ""), payload.get("message") or payload
+                )
+            )
+        response.raise_for_status()
+        return payload.get("data") or {}
+
+    def get_positions(self, symbol: str = "") -> List[Dict[str, Any]]:
+        """合約未平倉部位（/uapi/v1/account/positions）。"""
+        params = {"symbol": symbol} if symbol else None
+        data = self._signed_get("/uapi/v1/account/positions", params)
+        rows = data.get("positions", data) if isinstance(data, dict) else (data or [])
+        return rows or []
+
+    def get_futures_balance(self, coin: str = "USDT") -> Dict[str, Any]:
+        """合約帳戶餘額（/uapi/v1/account/balances）。"""
+        data = self._signed_get("/uapi/v1/account/balances")
+        rows = data.get("balances", []) if isinstance(data, dict) else (data or [])
+        return next(
+            (r for r in rows if str(r.get("coin", "")).upper() == coin.upper()),
+            rows[0] if rows else {},
+        )
+
+    def get_funding_fee(self, symbol: str = "", limit: int = 100) -> List[Dict[str, Any]]:
+        """資金費收付紀錄（/uapi/v1/trade/fundingFee，時間新到舊）。"""
+        params = {"limit": min(max(limit, 1), 100)}
+        if symbol:
+            params["symbol"] = symbol
+        data = self._signed_get("/uapi/v1/trade/fundingFee", params)
+        rows = data.get("fundingFees", data) if isinstance(data, dict) else (data or [])
+        return rows or []
+
+    def get_balances(self, hide_zero: bool = True) -> List[Dict[str, Any]]:
+        """現貨交易帳戶餘額（不含機器人／理財）。"""
+        data = self._signed_get("/api/v1/account/balances")
+        rows = data.get("balances", []) if isinstance(data, dict) else (data or [])
+        result = []
+        for row in rows:
+            free = float(row.get("free") or 0)
+            frozen = float(row.get("frozen") or 0)
+            if hide_zero and free + frozen == 0:
+                continue
+            result.append({
+                "coin": row.get("coin"),
+                "free": free,
+                "frozen": frozen,
+                "total": free + frozen,
+            })
+        return sorted(result, key=lambda r: -r["total"])
+
+
 class SinopacReadOnlyClient:
     """Lazy Shioaji wrapper. Importing the web app does not require Shioaji."""
 

@@ -9,5 +9,7 @@
     "binance_api_key": "use_environment_variable_instead",
     "binance_secret_key": "use_environment_variable_instead",
     "shioaji_api_key": "use_environment_variable_instead",
-    "shioaji_secret_key": "use_environment_variable_instead"
+    "shioaji_secret_key": "use_environment_variable_instead",
+    "pionex_api_key": "use_environment_variable_instead",
+    "pionex_secret_key": "use_environment_variable_instead"
 }
