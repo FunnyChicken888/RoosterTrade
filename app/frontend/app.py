@@ -546,8 +546,13 @@ def _find_live_position(symbol, exchange='bingx'):
         return None
     try:
         for p in client.get_positions(symbol):
-            if str(p.get('symbol')) == str(symbol) and _to_float(p.get('positionAmt')) != 0:
-                return _normalize_position(str(exchange).lower(), p)
+            if str(p.get('symbol')) != str(symbol):
+                continue
+            # 交給 _normalize_position 判斷數量欄位（各所不同：positionAmt / netSize），
+            # 它在已平倉時會回 None，避免這裡重複實作而與它脫節。
+            item = _normalize_position(str(exchange).lower(), p)
+            if item is not None:
+                return item
     except Exception:
         app.logger.warning('讀取 %s 部位 %s 失敗', exchange, symbol)
     return None
